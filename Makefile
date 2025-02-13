@@ -1,45 +1,26 @@
 # Go parameters
+GOCMD=go
+GOBUILD=$(GOCMD) build
+GOTEST=$(GOCMD) test
 BINARY_NAME=ghactions-updater
-MAIN_PACKAGE=./cmd/ghactions-updater
-GO=go
 DOCKER_IMAGE=ghactions-updater
-DOCKER_TAG=latest
 
-# Build the binary
-.PHONY: build
+.PHONY: all build test lint clean dockerbuild
+
+all: test build
+
 build:
-	$(GO) build -o bin/$(BINARY_NAME) $(MAIN_PACKAGE)
+	$(GOBUILD) -o bin/$(BINARY_NAME) ./cmd/ghactions-updater
 
-# Run tests with coverage
-.PHONY: test
 test:
-	$(GO) test -v -cover ./...
+	$(GOTEST) -v -cover ./...
 
-# Run linter
-.PHONY: lint
 lint:
-	golangci-lint run ./...
+	golangci-lint run
 
-# Build Docker image
-.PHONY: dockerbuild
-dockerbuild:
-	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
-
-# Clean build artifacts
-.PHONY: clean
 clean:
-	rm -rf bin/
-	$(GO) clean
+	rm -f bin/$(BINARY_NAME)
+	rm -rf vendor/
 
-# Install dependencies
-.PHONY: deps
-deps:
-	$(GO) mod download
-	$(GO) mod verify
-
-# Run all checks (lint and test)
-.PHONY: check
-check: lint test
-
-# Default target
-.DEFAULT_GOAL := build
+dockerbuild:
+	docker build -t $(DOCKER_IMAGE):latest .

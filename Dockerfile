@@ -1,39 +1,30 @@
-# Build stage
 FROM golang:1.24.0-alpine AS builder
 
-# Install build dependencies
-RUN apk add --no-cache git make
-
-# Set working directory
 WORKDIR /app
 
-# Copy go mod files
-COPY go.mod ./
-COPY go.sum ./
+# Install git for fetching dependencies
+RUN apk add --no-cache git
 
-# Download dependencies
+# Copy go.mod and go.sum first to leverage Docker cache
+COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
+# Copy the rest of the source code
 COPY . .
 
 # Build the binary
-RUN make build
+RUN CGO_ENABLED=0 GOOS=linux go build -o ghactions-updater ./cmd/ghactions-updater
 
-# Final stage
+# Create final minimal image
 FROM alpine:latest
 
 # Install ca-certificates for HTTPS requests
-RUN apk add --no-cache ca-certificates git
+RUN apk --no-cache add ca-certificates
 
-# Create non-root user
-RUN adduser -D -g '' appuser
+WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /app/bin/ghactions-updater /usr/local/bin/
+# Copy the binary from builder
+COPY --from=builder /app/ghactions-updater .
 
-# Use non-root user
-USER appuser
-
-# Set entrypoint
-ENTRYPOINT ["ghactions-updater"]
+# Set the entrypoint
+ENTRYPOINT ["/app/ghactions-updater"]
