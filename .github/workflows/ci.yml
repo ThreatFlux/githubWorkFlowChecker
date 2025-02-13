@@ -91,7 +91,7 @@ jobs:
         run: make build
 
       - name: Build Docker image
-        run: make dockerbuild
+        run: make docker_build
 
       - name: Upload binary
         uses: actions/upload-artifact@v4
