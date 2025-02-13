@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/google/go-github/v57/github"
+	"github.com/google/go-github/v58/github"
 	"golang.org/x/oauth2"
 )
 
