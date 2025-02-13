@@ -90,15 +90,51 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      # Using checkout action for repository access
       - uses: actions/checkout@v2
+
+      # Latest version of setup-node
       - uses: actions/setup-node@v3
+
+      # Using specific commit hash for cache action
+      # Original version: v3
       - uses: actions/cache@d1255ad9362389eac595a9ae406b8e8cb3331f16
+
       - run: npm test`
 
 	workflowFile := filepath.Join(tempDir, "workflow.yml")
 	err = os.WriteFile(workflowFile, []byte(workflowContent), 0644)
 	if err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Check specific references
+	expectedActions := []struct {
+		owner      string
+		name       string
+		version    string
+		commitHash string
+		comments   []string
+	}{
+		{
+			owner:    "actions",
+			name:     "checkout",
+			version:  "v2",
+			comments: []string{"# Using checkout action for repository access"},
+		},
+		{
+			owner:    "actions",
+			name:     "setup-node",
+			version:  "v3",
+			comments: []string{"# Latest version of setup-node"},
+		},
+		{
+			owner:      "actions",
+			name:       "cache",
+			version:    "v3",
+			commitHash: "d1255ad9362389eac595a9ae406b8e8cb3331f16",
+			comments:   []string{"# Using specific commit hash for cache action", "# Original version: v3"},
+		},
 	}
 
 	// Parse action references
@@ -109,22 +145,11 @@ jobs:
 	}
 
 	// Check number of references found
-	expectedRefs := 3
-	if len(refs) != expectedRefs {
-		t.Errorf("ParseActionReferences() found %d refs, want %d", len(refs), expectedRefs)
+	if len(refs) != len(expectedActions) {
+		t.Errorf("ParseActionReferences() found %d refs, want %d", len(refs), len(expectedActions))
 	}
 
 	// Check specific references
-	expectedActions := []struct {
-		owner   string
-		name    string
-		version string
-	}{
-		{"actions", "checkout", "v2"},
-		{"actions", "setup-node", "v3"},
-		{"actions", "cache", "d1255ad9362389eac595a9ae406b8e8cb3331f16"},
-	}
-
 	for i, expected := range expectedActions {
 		if refs[i].Owner != expected.owner {
 			t.Errorf("Action[%d] owner = %s, want %s", i, refs[i].Owner, expected.owner)
@@ -134,6 +159,18 @@ jobs:
 		}
 		if refs[i].Version != expected.version {
 			t.Errorf("Action[%d] version = %s, want %s", i, refs[i].Version, expected.version)
+		}
+		if refs[i].CommitHash != expected.commitHash {
+			t.Errorf("Action[%d] commitHash = %s, want %s", i, refs[i].CommitHash, expected.commitHash)
+		}
+		if len(refs[i].Comments) != len(expected.comments) {
+			t.Errorf("Action[%d] comment count = %d, want %d", i, len(refs[i].Comments), len(expected.comments))
+		} else {
+			for j, comment := range expected.comments {
+				if refs[i].Comments[j] != comment {
+					t.Errorf("Action[%d] comment[%d] = %s, want %s", i, j, refs[i].Comments[j], comment)
+				}
+			}
 		}
 	}
 }

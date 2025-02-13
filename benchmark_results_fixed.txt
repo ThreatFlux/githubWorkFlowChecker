@@ -1,0 +1,51 @@
+goos: linux
+goarch: amd64
+pkg: github.com/ThreatFlux/githubWorkFlowChecker/pkg/updater
+cpu: AMD Ryzen 9 9950X 16-Core Processor            
+BenchmarkScanWorkflows/workflows-10-16         	    3907	    300343 ns/op	  234824 B/op	    3203 allocs/op
+BenchmarkScanWorkflows/workflows-10-16         	    4540	    274853 ns/op	  234830 B/op	    3203 allocs/op
+BenchmarkScanWorkflows/workflows-10-16         	    3193	    396662 ns/op	  234905 B/op	    3203 allocs/op
+BenchmarkScanWorkflows/workflows-10-16         	    3861	    263607 ns/op	  234854 B/op	    3203 allocs/op
+BenchmarkScanWorkflows/workflows-10-16         	    3811	    306989 ns/op	  234901 B/op	    3203 allocs/op
+BenchmarkScanWorkflows/workflows-100-16        	     334	   3077173 ns/op	 2336447 B/op	   31862 allocs/op
+BenchmarkScanWorkflows/workflows-100-16        	     349	   3090029 ns/op	 2335979 B/op	   31862 allocs/op
+BenchmarkScanWorkflows/workflows-100-16        	     360	   2953518 ns/op	 2336005 B/op	   31862 allocs/op
+BenchmarkScanWorkflows/workflows-100-16        	     406	   2768307 ns/op	 2335948 B/op	   31862 allocs/op
+BenchmarkScanWorkflows/workflows-100-16        	     374	   2923814 ns/op	 2336371 B/op	   31862 allocs/op
+BenchmarkScanWorkflows/workflows-1000-16       	      37	  32297906 ns/op	23302799 B/op	  318384 allocs/op
+BenchmarkScanWorkflows/workflows-1000-16       	      37	  32914279 ns/op	23302857 B/op	  318385 allocs/op
+BenchmarkScanWorkflows/workflows-1000-16       	      31	  32459492 ns/op	23302914 B/op	  318385 allocs/op
+BenchmarkScanWorkflows/workflows-1000-16       	      33	  32108314 ns/op	23302837 B/op	  318384 allocs/op
+BenchmarkScanWorkflows/workflows-1000-16       	      36	  32228150 ns/op	23302916 B/op	  318385 allocs/op
+BenchmarkVersionChecker-16                     	 7188206	       179.4 ns/op	     352 B/op	       4 allocs/op
+BenchmarkVersionChecker-16                     	 7274568	       149.6 ns/op	     352 B/op	       4 allocs/op
+BenchmarkVersionChecker-16                     	 6433052	       179.9 ns/op	     352 B/op	       4 allocs/op
+BenchmarkVersionChecker-16                     	 8058444	       134.5 ns/op	     352 B/op	       4 allocs/op
+BenchmarkVersionChecker-16                     	 8757370	       139.4 ns/op	     352 B/op	       4 allocs/op
+BenchmarkMemoryUsage-16                        	1000000000	         0.001757 ns/op	         0.4747 MB_allocated	      1000 workflows_processed	       0 B/op	       0 allocs/op
+BenchmarkMemoryUsage-16                        	1000000000	         0.001515 ns/op	         0.4669 MB_allocated	      1000 workflows_processed	       0 B/op	       0 allocs/op
+BenchmarkMemoryUsage-16                        	1000000000	         0.001738 ns/op	         0.4747 MB_allocated	      1000 workflows_processed	       0 B/op	       0 allocs/op
+BenchmarkMemoryUsage-16                        	1000000000	         0.001948 ns/op	         0.4747 MB_allocated	      1000 workflows_processed	       0 B/op	       0 allocs/op
+BenchmarkMemoryUsage-16                        	1000000000	         0.001612 ns/op	         0.4669 MB_allocated	      1000 workflows_processed	       0 B/op	       0 allocs/op
+BenchmarkConcurrentOperations/goroutines-1-16  	     363	   2902437 ns/op	 2281273 B/op	   31443 allocs/op
+BenchmarkConcurrentOperations/goroutines-1-16  	     354	   3017531 ns/op	 2281270 B/op	   31443 allocs/op
+BenchmarkConcurrentOperations/goroutines-1-16  	     368	   2856329 ns/op	 2281271 B/op	   31443 allocs/op
+BenchmarkConcurrentOperations/goroutines-1-16  	     346	   3308971 ns/op	 2281273 B/op	   31443 allocs/op
+BenchmarkConcurrentOperations/goroutines-1-16  	     357	   2883165 ns/op	 2281275 B/op	   31443 allocs/op
+BenchmarkConcurrentOperations/goroutines-5-16  	     685	   2199264 ns/op	 2282695 B/op	   31464 allocs/op
+BenchmarkConcurrentOperations/goroutines-5-16  	     564	   1907457 ns/op	 2282713 B/op	   31464 allocs/op
+BenchmarkConcurrentOperations/goroutines-5-16  	     554	   2187811 ns/op	 2282692 B/op	   31464 allocs/op
+BenchmarkConcurrentOperations/goroutines-5-16  	     517	   2345214 ns/op	 2282695 B/op	   31464 allocs/op
+BenchmarkConcurrentOperations/goroutines-5-16  	     444	   2283512 ns/op	 2282694 B/op	   31464 allocs/op
+BenchmarkConcurrentOperations/goroutines-10-16 	     447	   2542259 ns/op	 2284481 B/op	   31489 allocs/op
+BenchmarkConcurrentOperations/goroutines-10-16 	     375	   2736795 ns/op	 2284425 B/op	   31489 allocs/op
+BenchmarkConcurrentOperations/goroutines-10-16 	     381	   3003858 ns/op	 2284447 B/op	   31489 allocs/op
+BenchmarkConcurrentOperations/goroutines-10-16 	     382	   2853196 ns/op	 2284424 B/op	   31489 allocs/op
+BenchmarkConcurrentOperations/goroutines-10-16 	     417	   2995510 ns/op	 2284415 B/op	   31489 allocs/op
+BenchmarkConcurrentOperations/goroutines-20-16 	     397	   2904890 ns/op	 2287982 B/op	   31540 allocs/op
+BenchmarkConcurrentOperations/goroutines-20-16 	     352	   3410073 ns/op	 2287972 B/op	   31540 allocs/op
+BenchmarkConcurrentOperations/goroutines-20-16 	     332	   3266963 ns/op	 2288013 B/op	   31540 allocs/op
+BenchmarkConcurrentOperations/goroutines-20-16 	     384	   3170827 ns/op	 2287966 B/op	   31540 allocs/op
+BenchmarkConcurrentOperations/goroutines-20-16 	     381	   3104662 ns/op	 2287956 B/op	   31540 allocs/op
+PASS
+ok  	github.com/ThreatFlux/githubWorkFlowChecker/pkg/updater	72.137s

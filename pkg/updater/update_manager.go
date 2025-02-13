@@ -16,18 +16,38 @@ func NewUpdateManager() *DefaultUpdateManager {
 }
 
 // CreateUpdate creates an update for a given action and its latest version
-func (m *DefaultUpdateManager) CreateUpdate(ctx context.Context, file string, action ActionReference, latestVersion string) (*Update, error) {
-	if action.Version == latestVersion {
+func (m *DefaultUpdateManager) CreateUpdate(ctx context.Context, file string, action ActionReference, latestVersion string, commitHash string) (*Update, error) {
+	if action.Version == latestVersion && action.CommitHash == commitHash {
 		return nil, nil
 	}
 
+	// Preserve existing comments
+	comments := m.PreserveComments(action)
+
+	// Determine the original version (use commit hash if available)
+	originalVersion := action.Version
+	if action.CommitHash != "" {
+		originalVersion = action.CommitHash
+	}
+
+	// Add version history comments
+	comments = []string{
+		fmt.Sprintf("# Using older hash from %s", originalVersion),
+		fmt.Sprintf("# Original version: %s", originalVersion),
+	}
+
 	return &Update{
-		Action:      action,
-		OldVersion:  action.Version,
-		NewVersion:  latestVersion,
-		FilePath:    file,
-		LineNumber:  action.Line,
-		Description: fmt.Sprintf("Update %s/%s from %s to %s", action.Owner, action.Name, action.Version, latestVersion),
+		Action:          action,
+		OldVersion:      action.Version,
+		NewVersion:      latestVersion,
+		OldHash:         action.CommitHash,
+		NewHash:         commitHash,
+		FilePath:        file,
+		LineNumber:      action.Line,
+		Comments:        comments,
+		VersionComment:  fmt.Sprintf("# %s", latestVersion),
+		OriginalVersion: originalVersion,
+		Description:     fmt.Sprintf("Update %s/%s from %s to %s", action.Owner, action.Name, originalVersion, latestVersion),
 	}, nil
 }
 
@@ -69,11 +89,37 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 			return fmt.Errorf("invalid line number %d for file %s", update.LineNumber, file)
 		}
 
-		// Get the line and replace the version
+		// Get the line and extract any comments
 		line := lines[update.LineNumber-1]
-		oldRef := fmt.Sprintf("%s/%s@%s", update.Action.Owner, update.Action.Name, update.OldVersion)
-		newRef := fmt.Sprintf("%s/%s@%s", update.Action.Owner, update.Action.Name, update.NewVersion)
-		lines[update.LineNumber-1] = strings.Replace(line, oldRef, newRef, 1)
+		parts := strings.SplitN(line, "#", 2)
+		mainPart := strings.TrimSpace(parts[0])
+
+		// Always use hash references
+		oldRef := fmt.Sprintf("%s/%s@%s", update.Action.Owner, update.Action.Name, update.OldHash)
+		if update.OldHash == "" {
+			oldRef = fmt.Sprintf("%s/%s@%s", update.Action.Owner, update.Action.Name, update.OldVersion)
+		}
+		newRef := fmt.Sprintf("%s/%s@%s", update.Action.Owner, update.Action.Name, update.NewHash)
+		mainPart = strings.Replace(mainPart, oldRef, newRef, -1)
+
+		// Add version history comments
+		comments := []string{
+			fmt.Sprintf("# Using older hash from %s", update.OriginalVersion),
+			fmt.Sprintf("# Original version: %s", update.OriginalVersion),
+		}
+
+		// Reconstruct the line with comments and version
+		newLine := fmt.Sprintf("%s  # %s", strings.TrimSpace(mainPart), update.NewVersion)
+
+		// Insert version history comments before the line
+		newLines := make([]string, 0, len(lines)+2)
+		newLines = append(newLines, lines[:update.LineNumber-1]...)
+		newLines = append(newLines, comments...)
+		newLines = append(newLines, newLine)
+		if update.LineNumber < len(lines) {
+			newLines = append(newLines, lines[update.LineNumber:]...)
+		}
+		lines = newLines
 	}
 
 	// Join lines back together
@@ -85,6 +131,22 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 	}
 
 	return nil
+}
+
+// PreserveComments preserves existing comments when updating an action
+func (m *DefaultUpdateManager) PreserveComments(action ActionReference) []string {
+	if len(action.Comments) == 0 {
+		return nil
+	}
+
+	// Keep all comments except the version comment we'll update
+	var preserved []string
+	for _, comment := range action.Comments {
+		if !strings.Contains(comment, "Original version:") {
+			preserved = append(preserved, comment)
+		}
+	}
+	return preserved
 }
 
 // sortUpdatesByLine sorts updates by line number in descending order

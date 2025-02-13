@@ -1,53 +1,47 @@
 # Active Context
 
 ## Current Focus
-Performance optimization implementation
+Unified version and hash reference handling
 
 ## Recent Changes
-- Completed performance testing phase
-  * Fixed version checker benchmarks
-  * Generated comprehensive metrics
-  * Identified optimization targets
+- Enhanced version and hash handling
+  * Unified approach for all reference types
+  * Standardized comment preservation
+  * Improved hash resolution from tags
 - Performance baselines established
   * Version check: ~157ns per operation
   * Workflow scan: ~33ms per file
   * Memory usage: ~23MB for 1000 files
   * Optimal concurrency: 5 goroutines
-- Updated performance documentation
-  * Added detailed metrics
-  * Documented bottlenecks
-  * Listed optimization recommendations
+- Security improvements
+  * Version checker now uses commit hashes instead of version tags
+  * Added support for annotated tags to get correct commit hashes
+  * Preserved version tag comments in workflow files
+  * End-to-end tests verify secure update behavior
+  * Added tests against cryptum-go repository
 
 ## Next Steps
-1. Version Checker Optimization
-   - Response caching
-     * Implement in-memory cache
-     * Add TTL support
-     * Handle cache invalidation
-   - Rate limiting
-     * Add backoff strategy
-     * Implement retry logic
-     * Monitor rate limits
+1. Reference Handling Enhancement
+   - Core Updates
+     * Unified version/hash handling in PR creator
+     * Standardized comment format implementation
+     * Hash resolution improvements
+   - Testing Improvements
+     * Comprehensive hash verification
+     * Comment format validation
+     * Edge case coverage
 
-2. File Processing Optimization
-   - Streaming YAML parsing
-     * Research streaming parsers
-     * Benchmark alternatives
-     * Implement chosen solution
-   - File system operations
-     * Add content caching
-     * Optimize I/O patterns
-     * Reduce allocations
+2. Documentation Updates
+   - Document version tag handling
+   - Update API documentation
+   - Add usage examples
+   - Update contributing guidelines
 
-3. Concurrency Improvements
-   - Worker pool implementation
-     * Design pool architecture
-     * Add dynamic scaling
-     * Optimize work distribution
-   - Resource management
-     * Add monitoring
-     * Implement limits
-     * Handle backpressure
+3. Release Preparation
+   - Final testing
+   - Documentation review
+   - Version tagging
+   - Release notes
 
 ## Current Branch
 main

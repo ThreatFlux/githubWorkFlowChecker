@@ -89,14 +89,21 @@ func run() error {
 
 		// Check each action for updates
 		for _, ref := range refs {
-			latestVersion, err := checker.GetLatestVersion(ctx, ref)
+			latestVersion, latestHash, err := checker.GetLatestVersion(ctx, ref)
 			if err != nil {
 				log.Printf("Failed to check %s/%s: %v", ref.Owner, ref.Name, err)
 				continue
 			}
 
-			if updater.IsNewer(latestVersion, ref.Version) {
-				update, err := manager.CreateUpdate(ctx, file, ref, latestVersion)
+			// Check if update is available
+			available, _, _, err := checker.IsUpdateAvailable(ctx, ref)
+			if err != nil {
+				log.Printf("Failed to check update availability for %s/%s: %v", ref.Owner, ref.Name, err)
+				continue
+			}
+
+			if available {
+				update, err := manager.CreateUpdate(ctx, file, ref, latestVersion, latestHash)
 				if err != nil {
 					log.Printf("Failed to create update for %s/%s: %v", ref.Owner, ref.Name, err)
 					continue

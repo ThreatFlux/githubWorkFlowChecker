@@ -1,0 +1,58 @@
+goos: linux
+goarch: amd64
+pkg: github.com/ThreatFlux/githubWorkFlowChecker/pkg/updater
+cpu: AMD Ryzen 9 9950X 16-Core Processor            
+BenchmarkScanWorkflows/workflows-10-16         	    3736	    356194 ns/op	  234934 B/op	    3203 allocs/op
+BenchmarkScanWorkflows/workflows-10-16         	    3840	    375390 ns/op	  234936 B/op	    3203 allocs/op
+BenchmarkScanWorkflows/workflows-10-16         	    4528	    297103 ns/op	  234858 B/op	    3203 allocs/op
+BenchmarkScanWorkflows/workflows-10-16         	    3957	    308698 ns/op	  234840 B/op	    3203 allocs/op
+BenchmarkScanWorkflows/workflows-10-16         	    3764	    332481 ns/op	  234879 B/op	    3203 allocs/op
+BenchmarkScanWorkflows/workflows-100-16        	     350	   3229811 ns/op	 2336155 B/op	   31862 allocs/op
+BenchmarkScanWorkflows/workflows-100-16        	     364	   3038695 ns/op	 2336382 B/op	   31862 allocs/op
+BenchmarkScanWorkflows/workflows-100-16        	     330	   3450656 ns/op	 2336449 B/op	   31862 allocs/op
+BenchmarkScanWorkflows/workflows-100-16        	     358	   3004263 ns/op	 2336371 B/op	   31862 allocs/op
+BenchmarkScanWorkflows/workflows-100-16        	     363	   2967545 ns/op	 2336449 B/op	   31862 allocs/op
+BenchmarkScanWorkflows/workflows-1000-16       	      32	  34882216 ns/op	23303028 B/op	  318385 allocs/op
+BenchmarkScanWorkflows/workflows-1000-16       	      37	  33548215 ns/op	23302784 B/op	  318384 allocs/op
+BenchmarkScanWorkflows/workflows-1000-16       	      36	  33161822 ns/op	23303032 B/op	  318385 allocs/op
+BenchmarkScanWorkflows/workflows-1000-16       	      37	  29457404 ns/op	23302839 B/op	  318384 allocs/op
+BenchmarkScanWorkflows/workflows-1000-16       	      36	  32100309 ns/op	23302776 B/op	  318384 allocs/op
+BenchmarkVersionChecker-16                     	--- FAIL: BenchmarkVersionChecker-16
+    benchmark_test.go:97: no version information found for actions/checkout
+BenchmarkVersionChecker-16                     	--- FAIL: BenchmarkVersionChecker-16
+    benchmark_test.go:97: no version information found for actions/checkout
+BenchmarkVersionChecker-16                     	--- FAIL: BenchmarkVersionChecker-16
+    benchmark_test.go:97: no version information found for actions/checkout
+BenchmarkVersionChecker-16                     	--- FAIL: BenchmarkVersionChecker-16
+    benchmark_test.go:97: no version information found for actions/checkout
+BenchmarkVersionChecker-16                     	--- FAIL: BenchmarkVersionChecker-16
+    benchmark_test.go:97: no version information found for actions/checkout
+BenchmarkMemoryUsage-16                        	1000000000	         0.001848 ns/op	         0.4747 MB_allocated	      1000 workflows_processed	       0 B/op	       0 allocs/op
+BenchmarkMemoryUsage-16                        	1000000000	         0.001839 ns/op	         0.4747 MB_allocated	      1000 workflows_processed	       0 B/op	       0 allocs/op
+BenchmarkMemoryUsage-16                        	1000000000	         0.001816 ns/op	         0.4747 MB_allocated	      1000 workflows_processed	       0 B/op	       0 allocs/op
+BenchmarkMemoryUsage-16                        	1000000000	         0.002206 ns/op	         0.4747 MB_allocated	      1000 workflows_processed	       0 B/op	       0 allocs/op
+BenchmarkMemoryUsage-16                        	1000000000	         0.001730 ns/op	         0.4669 MB_allocated	      1000 workflows_processed	       0 B/op	       0 allocs/op
+BenchmarkConcurrentOperations/goroutines-1-16  	     396	   2706366 ns/op	 2281276 B/op	   31443 allocs/op
+BenchmarkConcurrentOperations/goroutines-1-16  	     369	   3093953 ns/op	 2281274 B/op	   31443 allocs/op
+BenchmarkConcurrentOperations/goroutines-1-16  	     379	   3155501 ns/op	 2281274 B/op	   31443 allocs/op
+BenchmarkConcurrentOperations/goroutines-1-16  	     392	   2614823 ns/op	 2281275 B/op	   31443 allocs/op
+BenchmarkConcurrentOperations/goroutines-1-16  	     385	   2938805 ns/op	 2281275 B/op	   31443 allocs/op
+BenchmarkConcurrentOperations/goroutines-5-16  	     480	   2243401 ns/op	 2282825 B/op	   31464 allocs/op
+BenchmarkConcurrentOperations/goroutines-5-16  	     507	   2166286 ns/op	 2282707 B/op	   31464 allocs/op
+BenchmarkConcurrentOperations/goroutines-5-16  	     532	   2389302 ns/op	 2282715 B/op	   31464 allocs/op
+BenchmarkConcurrentOperations/goroutines-5-16  	     534	   2190602 ns/op	 2282727 B/op	   31464 allocs/op
+BenchmarkConcurrentOperations/goroutines-5-16  	     531	   2212821 ns/op	 2282696 B/op	   31464 allocs/op
+BenchmarkConcurrentOperations/goroutines-10-16 	     422	   2540865 ns/op	 2284434 B/op	   31489 allocs/op
+BenchmarkConcurrentOperations/goroutines-10-16 	     434	   2585633 ns/op	 2284446 B/op	   31489 allocs/op
+BenchmarkConcurrentOperations/goroutines-10-16 	     390	   2907877 ns/op	 2284429 B/op	   31489 allocs/op
+BenchmarkConcurrentOperations/goroutines-10-16 	     392	   2759177 ns/op	 2284438 B/op	   31489 allocs/op
+BenchmarkConcurrentOperations/goroutines-10-16 	     412	   2846937 ns/op	 2284437 B/op	   31489 allocs/op
+BenchmarkConcurrentOperations/goroutines-20-16 	     388	   3232160 ns/op	 2288006 B/op	   31540 allocs/op
+BenchmarkConcurrentOperations/goroutines-20-16 	     361	   3143024 ns/op	 2287982 B/op	   31540 allocs/op
+BenchmarkConcurrentOperations/goroutines-20-16 	     350	   3120679 ns/op	 2287920 B/op	   31539 allocs/op
+BenchmarkConcurrentOperations/goroutines-20-16 	     375	   3240780 ns/op	 2287957 B/op	   31540 allocs/op
+BenchmarkConcurrentOperations/goroutines-20-16 	     362	   3236609 ns/op	 2287922 B/op	   31539 allocs/op
+FAIL
+exit status 1
+FAIL	github.com/ThreatFlux/githubWorkFlowChecker/pkg/updater	59.764s
+FAIL

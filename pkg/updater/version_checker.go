@@ -31,8 +31,8 @@ func NewDefaultVersionChecker(token string) *DefaultVersionChecker {
 	return &DefaultVersionChecker{client: client}
 }
 
-// GetLatestVersion returns the latest version for a given action
-func (c *DefaultVersionChecker) GetLatestVersion(ctx context.Context, action ActionReference) (string, error) {
+// GetLatestVersion returns the latest version and its commit hash for a given action
+func (c *DefaultVersionChecker) GetLatestVersion(ctx context.Context, action ActionReference) (string, string, error) {
 	// First try to get the latest release
 	var release *github.RepositoryRelease
 	var resp *github.Response
@@ -43,55 +43,87 @@ func (c *DefaultVersionChecker) GetLatestVersion(ctx context.Context, action Act
 	} else {
 		release, resp, err = c.client.Repositories.GetLatestRelease(ctx, action.Owner, action.Name)
 	}
-	if err == nil && release != nil && release.TagName != nil {
-		return *release.TagName, nil
-	}
 
-	// If no releases found or error occurred, try listing tags
-	if resp != nil && resp.StatusCode == http.StatusNotFound || err != nil {
+	// Get the latest tag and its commit hash
+	var tagName string
+	if err == nil && release != nil && release.TagName != nil {
+		tagName = *release.TagName
+	} else if resp != nil && resp.StatusCode == http.StatusNotFound || err != nil {
+		// If no releases found or error occurred, try listing tags
 		opts := &github.ListOptions{
 			PerPage: 1,
 		}
 		tags, _, err := c.client.Repositories.ListTags(ctx, action.Owner, action.Name, opts)
 		if err != nil {
-			return "", fmt.Errorf("error getting tags: %w", err)
+			return "", "", fmt.Errorf("error getting tags: %w", err)
 		}
-		if len(tags) > 0 && tags[0].Name != nil {
-			return *tags[0].Name, nil
+		if len(tags) == 0 || tags[0].Name == nil {
+			return "", "", fmt.Errorf("no version information found for %s/%s", action.Owner, action.Name)
 		}
+		tagName = *tags[0].Name
+	} else {
+		return "", "", fmt.Errorf("no version information found for %s/%s", action.Owner, action.Name)
 	}
 
-	return "", fmt.Errorf("no version information found for %s/%s", action.Owner, action.Name)
+	// Get the commit hash for the tag
+	commitHash, err := c.GetCommitHash(ctx, action, tagName)
+	if err != nil {
+		return "", "", err
+	}
+
+	return tagName, commitHash, nil
 }
 
 // IsUpdateAvailable checks if a newer version is available
-func (c *DefaultVersionChecker) IsUpdateAvailable(ctx context.Context, action ActionReference) (bool, string, error) {
-	latestVersion, err := c.GetLatestVersion(ctx, action)
+func (c *DefaultVersionChecker) IsUpdateAvailable(ctx context.Context, action ActionReference) (bool, string, string, error) {
+	latestVersion, latestHash, err := c.GetLatestVersion(ctx, action)
 	if err != nil {
-		return false, "", err
+		return false, "", "", err
 	}
 
-	// If current version is a commit SHA, always suggest update to latest tag
+	// If current version is a commit SHA, compare directly
 	if len(action.Version) == 40 && isHexString(action.Version) {
-		return true, latestVersion, nil
+		return action.Version != latestHash, latestVersion, latestHash, nil
 	}
 
-	// Compare versions
+	// If current version is a tag, check if it's older
+	if action.CommitHash != "" {
+		return action.CommitHash != latestHash, latestVersion, latestHash, nil
+	}
+
+	// If no commit hash is available, check version strings
 	if IsNewer(latestVersion, action.Version) {
-		return true, latestVersion, nil
+		return true, latestVersion, latestHash, nil
 	}
 
-	return false, "", nil
+	return false, latestVersion, latestHash, nil
 }
 
-// isHexString checks if a string is a valid hexadecimal string (for commit SHAs)
-func isHexString(s string) bool {
-	for _, r := range s {
-		if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
-			return false
-		}
+// GetCommitHash returns the commit hash for a specific version of an action
+func (c *DefaultVersionChecker) GetCommitHash(ctx context.Context, action ActionReference, version string) (string, error) {
+	// Get the commit hash for the tag/version
+	ref, _, err := c.client.Git.GetRef(ctx, action.Owner, action.Name, "tags/"+version)
+	if err != nil {
+		return "", fmt.Errorf("error getting ref for tag %s: %w", version, err)
 	}
-	return true
+
+	if ref.Object == nil || ref.Object.SHA == nil {
+		return "", fmt.Errorf("no commit hash found for tag %s", version)
+	}
+
+	// If the tag points to an annotated tag object, we need to get the commit it points to
+	if ref.Object.Type != nil && *ref.Object.Type == "tag" {
+		tag, _, err := c.client.Git.GetTag(ctx, action.Owner, action.Name, *ref.Object.SHA)
+		if err != nil {
+			return "", fmt.Errorf("error getting annotated tag %s: %w", version, err)
+		}
+		if tag.Object == nil || tag.Object.SHA == nil {
+			return "", fmt.Errorf("no commit hash found in annotated tag %s", version)
+		}
+		return *tag.Object.SHA, nil
+	}
+
+	return *ref.Object.SHA, nil
 }
 
 // IsNewer compares two version strings and returns true if v1 is newer than v2

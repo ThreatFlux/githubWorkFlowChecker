@@ -63,6 +63,19 @@
    - Construct pull requests
    - Build update summaries
 
+5. Reference Handling
+   - Unified approach for versions and hashes
+   - Standard comment format:
+     ```yaml
+     # Using older hash from [old-version]
+     # Original version: [old-version]
+     uses: actions/[name]@[hash]  # [new-version]
+     ```
+   - Hash resolution strategy
+     * Direct hash references
+     * Version tag resolution
+     * Annotated tag handling
+
 ## Error Handling
 1. Custom error types
 2. Graceful degradation

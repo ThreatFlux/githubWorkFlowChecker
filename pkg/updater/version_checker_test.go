@@ -251,20 +251,50 @@ func TestDefaultVersionChecker(t *testing.T) {
 					}
 				})
 
+			// Mock the Git.GetRef endpoint for the latest version
+			mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/%s", tt.action.Owner, tt.action.Name, tt.wantVersion),
+				func(w http.ResponseWriter, r *http.Request) {
+					fmt.Fprintf(w, `{
+						"ref": "refs/tags/%s",
+						"object": {
+							"sha": "abcdef1234567890",
+							"type": "commit"
+						}
+					}`, tt.wantVersion)
+				})
+
+			// Mock the Git.GetRef endpoint for the old version
+			mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/v1.0.0", tt.action.Owner, tt.action.Name),
+				func(w http.ResponseWriter, r *http.Request) {
+					fmt.Fprintf(w, `{
+						"ref": "refs/tags/v1.0.0",
+						"object": {
+							"sha": "0987654321fedcba",
+							"type": "commit"
+						}
+					}`)
+				})
+
 			// Test GetLatestVersion
-			version, err := checker.GetLatestVersion(context.Background(), tt.action)
+			version, hash, err := checker.GetLatestVersion(context.Background(), tt.action)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetLatestVersion() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !tt.wantErr && version != tt.wantVersion {
-				t.Errorf("GetLatestVersion() = %v, want %v", version, tt.wantVersion)
+			if !tt.wantErr {
+				if version != tt.wantVersion {
+					t.Errorf("GetLatestVersion() version = %v, want %v", version, tt.wantVersion)
+				}
+				if hash != "abcdef1234567890" {
+					t.Errorf("GetLatestVersion() hash = %v, want abcdef1234567890", hash)
+				}
 			}
 
 			// Test IsUpdateAvailable
 			if !tt.wantErr {
-				tt.action.Version = "v1.0.0" // Set an old version
-				available, newVersion, err := checker.IsUpdateAvailable(context.Background(), tt.action)
+				tt.action.Version = "v1.0.0"              // Set an old version
+				tt.action.CommitHash = "0987654321fedcba" // Set old hash
+				available, newVersion, newHash, err := checker.IsUpdateAvailable(context.Background(), tt.action)
 				if err != nil {
 					t.Errorf("IsUpdateAvailable() error = %v", err)
 					return
@@ -272,8 +302,13 @@ func TestDefaultVersionChecker(t *testing.T) {
 				if available != tt.wantAvailable {
 					t.Errorf("IsUpdateAvailable() available = %v, want %v", available, tt.wantAvailable)
 				}
-				if tt.wantAvailable && newVersion != tt.wantVersion {
-					t.Errorf("IsUpdateAvailable() version = %v, want %v", newVersion, tt.wantVersion)
+				if tt.wantAvailable {
+					if newVersion != tt.wantVersion {
+						t.Errorf("IsUpdateAvailable() version = %v, want %v", newVersion, tt.wantVersion)
+					}
+					if newHash != "abcdef1234567890" {
+						t.Errorf("IsUpdateAvailable() hash = %v, want abcdef1234567890", newHash)
+					}
 				}
 			}
 		})
@@ -282,28 +317,37 @@ func TestDefaultVersionChecker(t *testing.T) {
 
 type MockVersionChecker struct {
 	latestVersion string
+	latestHash    string
 	err           error
 }
 
-func NewMockVersionChecker(latestVersion string, err error) *MockVersionChecker {
+func NewMockVersionChecker(latestVersion string, latestHash string, err error) *MockVersionChecker {
 	return &MockVersionChecker{
 		latestVersion: latestVersion,
+		latestHash:    latestHash,
 		err:           err,
 	}
 }
 
-func (m *MockVersionChecker) GetLatestVersion(ctx context.Context, action ActionReference) (string, error) {
-	return m.latestVersion, m.err
+func (m *MockVersionChecker) GetLatestVersion(ctx context.Context, action ActionReference) (string, string, error) {
+	return m.latestVersion, m.latestHash, m.err
 }
 
-func (m *MockVersionChecker) IsUpdateAvailable(ctx context.Context, action ActionReference) (bool, string, error) {
+func (m *MockVersionChecker) IsUpdateAvailable(ctx context.Context, action ActionReference) (bool, string, string, error) {
 	if m.err != nil {
-		return false, "", m.err
+		return false, "", "", m.err
 	}
 	if IsNewer(m.latestVersion, action.Version) {
-		return true, m.latestVersion, nil
+		return true, m.latestVersion, m.latestHash, nil
 	}
-	return false, "", nil
+	return false, m.latestVersion, m.latestHash, nil
+}
+
+func (m *MockVersionChecker) GetCommitHash(ctx context.Context, action ActionReference, version string) (string, error) {
+	if m.err != nil {
+		return "", m.err
+	}
+	return m.latestHash, nil
 }
 
 func TestMockVersionChecker(t *testing.T) {
@@ -317,33 +361,54 @@ func TestMockVersionChecker(t *testing.T) {
 	tests := []struct {
 		name          string
 		latestVersion string
+		latestHash    string
 		currentAction ActionReference
 		wantUpdate    bool
 		wantVersion   string
+		wantHash      string
 		wantErr       bool
 	}{
 		{
 			name:          "update available",
 			latestVersion: "v3",
+			latestHash:    "abc123",
 			currentAction: action,
 			wantUpdate:    true,
 			wantVersion:   "v3",
+			wantHash:      "abc123",
 			wantErr:       false,
 		},
 		{
 			name:          "no update needed",
 			latestVersion: "v1",
+			latestHash:    "def456",
 			currentAction: action,
 			wantUpdate:    false,
-			wantVersion:   "",
+			wantVersion:   "v1",
+			wantHash:      "def456",
 			wantErr:       false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			checker := NewMockVersionChecker(tt.latestVersion, nil)
-			gotUpdate, gotVersion, err := checker.IsUpdateAvailable(ctx, tt.currentAction)
+			checker := NewMockVersionChecker(tt.latestVersion, tt.latestHash, nil)
+
+			// Test GetLatestVersion
+			version, hash, err := checker.GetLatestVersion(ctx, tt.currentAction)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetLatestVersion() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if version != tt.latestVersion {
+				t.Errorf("GetLatestVersion() version = %v, want %v", version, tt.latestVersion)
+			}
+			if hash != tt.latestHash {
+				t.Errorf("GetLatestVersion() hash = %v, want %v", hash, tt.latestHash)
+			}
+
+			// Test IsUpdateAvailable
+			gotUpdate, gotVersion, gotHash, err := checker.IsUpdateAvailable(ctx, tt.currentAction)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("IsUpdateAvailable() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -353,6 +418,104 @@ func TestMockVersionChecker(t *testing.T) {
 			}
 			if gotVersion != tt.wantVersion {
 				t.Errorf("IsUpdateAvailable() version = %v, want %v", gotVersion, tt.wantVersion)
+			}
+			if gotHash != tt.wantHash {
+				t.Errorf("IsUpdateAvailable() hash = %v, want %v", gotHash, tt.wantHash)
+			}
+
+			// Test GetCommitHash
+			hash, err = checker.GetCommitHash(ctx, tt.currentAction, tt.latestVersion)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetCommitHash() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if hash != tt.latestHash {
+				t.Errorf("GetCommitHash() = %v, want %v", hash, tt.latestHash)
+			}
+		})
+	}
+}
+
+func TestGetCommitHash(t *testing.T) {
+	// Set up test server
+	mux := http.NewServeMux()
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	// Create a client that points to test server
+	client := github.NewClient(nil)
+	url, _ := url.Parse(server.URL + "/")
+	client.BaseURL = url
+
+	checker := &DefaultVersionChecker{client: client}
+
+	tests := []struct {
+		name     string
+		action   ActionReference
+		version  string
+		wantHash string
+		mockType string // "commit" or "tag"
+		wantErr  bool
+	}{
+		{
+			name: "commit reference",
+			action: ActionReference{
+				Owner: "actions",
+				Name:  "checkout",
+			},
+			version:  "v3",
+			wantHash: "abc123def456",
+			mockType: "commit",
+			wantErr:  false,
+		},
+		{
+			name: "annotated tag",
+			action: ActionReference{
+				Owner: "actions",
+				Name:  "setup-go",
+			},
+			version:  "v2",
+			wantHash: "def456abc123",
+			mockType: "tag",
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Mock the Git.GetRef endpoint for the version
+			mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/%s", tt.action.Owner, tt.action.Name, tt.version),
+				func(w http.ResponseWriter, r *http.Request) {
+					fmt.Fprintf(w, `{
+						"ref": "refs/tags/%s",
+						"object": {
+							"sha": "%s",
+							"type": "%s"
+						}
+					}`, tt.version, tt.wantHash, tt.mockType)
+				})
+
+			// For annotated tags, mock the Git.GetTag endpoint
+			if tt.mockType == "tag" {
+				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/tags/%s", tt.action.Owner, tt.action.Name, tt.wantHash),
+					func(w http.ResponseWriter, r *http.Request) {
+						fmt.Fprintf(w, `{
+							"sha": "%s",
+							"object": {
+								"sha": "%s",
+								"type": "commit"
+							}
+						}`, tt.wantHash, tt.wantHash)
+					})
+			}
+
+			hash, err := checker.GetCommitHash(context.Background(), tt.action, tt.version)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetCommitHash() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if hash != tt.wantHash {
+				t.Errorf("GetCommitHash() = %v, want %v", hash, tt.wantHash)
 			}
 		})
 	}

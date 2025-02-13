@@ -3,6 +3,8 @@ package updater
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -103,6 +105,27 @@ func (c *DefaultPRCreator) createBranch(ctx context.Context, branchName string) 
 	return err
 }
 
+// formatActionReference formats an action reference with version comments
+func (c *DefaultPRCreator) formatActionReference(update *Update) string {
+	var sb strings.Builder
+
+	// Add version history comment if we have an original version
+	if update.OriginalVersion != "" {
+		sb.WriteString(fmt.Sprintf("# Using older hash from %s\n", update.OriginalVersion))
+		sb.WriteString(fmt.Sprintf("# Original version: %s\n", update.OriginalVersion))
+	}
+
+	// Add the action reference with hash
+	sb.WriteString(fmt.Sprintf("uses: %s/%s@%s", update.Action.Owner, update.Action.Name, update.NewHash))
+
+	// Add current version comment
+	if update.NewVersion != "" {
+		sb.WriteString(fmt.Sprintf("  # %s", update.NewVersion))
+	}
+
+	return sb.String()
+}
+
 // createCommit creates a commit with all updates
 func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, updates []*Update) error {
 	// Group updates by file
@@ -114,8 +137,26 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 	// Create tree entries for each file
 	var entries []*github.TreeEntry
 	for file, fileUpdates := range fileUpdates {
+		// Convert absolute path to relative path
+		relPath := file
+		if filepath.IsAbs(relPath) {
+			// Find the repository root by looking for .git directory
+			cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+			cmd.Dir = filepath.Dir(file)
+			repoRoot, err := cmd.Output()
+			if err != nil {
+				return fmt.Errorf("error finding repository root: %w", err)
+			}
+
+			// Convert to relative path
+			relPath, err = filepath.Rel(strings.TrimSpace(string(repoRoot)), file)
+			if err != nil {
+				return fmt.Errorf("error converting to relative path: %w", err)
+			}
+		}
+
 		// Get current file content
-		content, _, _, err := c.client.Repositories.GetContents(ctx, c.owner, c.repo, file,
+		content, _, _, err := c.client.Repositories.GetContents(ctx, c.owner, c.repo, relPath,
 			&github.RepositoryContentGetOptions{Ref: branch})
 		if err != nil {
 			return fmt.Errorf("error getting file contents: %w", err)
@@ -127,11 +168,17 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 			return fmt.Errorf("error decoding content: %w", err)
 		}
 
+		lines := strings.Split(fileContent, "\n")
 		for _, update := range fileUpdates {
-			oldRef := fmt.Sprintf("%s/%s@%s", update.Action.Owner, update.Action.Name, update.OldVersion)
-			newRef := fmt.Sprintf("%s/%s@%s", update.Action.Owner, update.Action.Name, update.NewVersion)
-			fileContent = strings.Replace(fileContent, oldRef, newRef, 1)
+			// Find the line with the action reference
+			lineIdx := update.LineNumber - 1
+			if lineIdx >= 0 && lineIdx < len(lines) {
+				// Format the new reference with comments
+				newRef := c.formatActionReference(update)
+				lines[lineIdx] = newRef
+			}
 		}
+		fileContent = strings.Join(lines, "\n")
 
 		// Create blob for updated content
 		blob, _, err := c.client.Git.CreateBlob(ctx, c.owner, c.repo, &github.Blob{
@@ -142,9 +189,11 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 			return fmt.Errorf("error creating blob: %w", err)
 		}
 
-		// Add tree entry
+		// Ensure path doesn't start with a slash
+		relPath = strings.TrimPrefix(relPath, "/")
+
 		entries = append(entries, &github.TreeEntry{
-			Path: github.String(file),
+			Path: github.String(relPath),
 			Mode: github.String("100644"),
 			Type: github.String("blob"),
 			SHA:  blob.SHA,
@@ -195,11 +244,17 @@ func (c *DefaultPRCreator) generatePRBody(updates []*Update) string {
 	sb.WriteString("This PR updates the following GitHub Actions to their latest versions:\n\n")
 
 	for _, update := range updates {
-		sb.WriteString(fmt.Sprintf("* `%s/%s` from %s to %s\n",
-			update.Action.Owner, update.Action.Name, update.OldVersion, update.NewVersion))
+		sb.WriteString(fmt.Sprintf("* `%s/%s`\n", update.Action.Owner, update.Action.Name))
+		sb.WriteString(fmt.Sprintf("  * From: %s (%s)\n", update.OldVersion, update.OldHash))
+		sb.WriteString(fmt.Sprintf("  * To: %s (%s)\n", update.NewVersion, update.NewHash))
+		if update.OriginalVersion != "" && update.OriginalVersion != update.OldVersion {
+			sb.WriteString(fmt.Sprintf("  * Original version: %s\n", update.OriginalVersion))
+		}
+		sb.WriteString("\n")
 	}
 
-	sb.WriteString("\n---\n")
+	sb.WriteString("---\n")
+	sb.WriteString("🔒 This PR uses commit hashes for improved security.\n")
 	sb.WriteString("🤖 This PR was created automatically by the GitHub Actions workflow updater.")
 	return sb.String()
 }

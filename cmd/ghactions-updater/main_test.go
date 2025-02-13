@@ -18,18 +18,26 @@ var osExit = os.Exit
 
 type mockVersionChecker struct {
 	latestVersion string
+	latestHash    string
 	err           error
 }
 
-func (m *mockVersionChecker) GetLatestVersion(ctx context.Context, action updater.ActionReference) (string, error) {
-	return m.latestVersion, m.err
+func (m *mockVersionChecker) GetLatestVersion(ctx context.Context, action updater.ActionReference) (string, string, error) {
+	return m.latestVersion, m.latestHash, m.err
 }
 
-func (m *mockVersionChecker) IsUpdateAvailable(ctx context.Context, action updater.ActionReference) (bool, string, error) {
+func (m *mockVersionChecker) IsUpdateAvailable(ctx context.Context, action updater.ActionReference) (bool, string, string, error) {
 	if m.err != nil {
-		return false, "", m.err
+		return false, "", "", m.err
 	}
-	return true, m.latestVersion, nil
+	return true, m.latestVersion, m.latestHash, nil
+}
+
+func (m *mockVersionChecker) GetCommitHash(ctx context.Context, action updater.ActionReference, version string) (string, error) {
+	if m.err != nil {
+		return "", m.err
+	}
+	return m.latestHash, nil
 }
 
 type mockPRCreator struct {
@@ -59,6 +67,7 @@ jobs:
       - uses: actions/checkout@v2`,
 			versionChecker: &mockVersionChecker{
 				latestVersion: "v3",
+				latestHash:    "abc123def456",
 				err:           nil,
 			},
 			prCreator: &mockPRCreator{
@@ -77,6 +86,7 @@ jobs:
       - uses: actions/checkout@v2`,
 			versionChecker: &mockVersionChecker{
 				latestVersion: "",
+				latestHash:    "",
 				err:           fmt.Errorf("API error"),
 			},
 			prCreator: &mockPRCreator{
@@ -95,6 +105,7 @@ jobs:
       - uses: actions/checkout@v2`,
 			versionChecker: &mockVersionChecker{
 				latestVersion: "v3",
+				latestHash:    "abc123def456",
 				err:           nil,
 			},
 			prCreator: &mockPRCreator{
@@ -107,6 +118,7 @@ jobs:
 			workflowContent: "",
 			versionChecker: &mockVersionChecker{
 				latestVersion: "v3",
+				latestHash:    "abc123def456",
 				err:           nil,
 			},
 			prCreator: &mockPRCreator{
@@ -261,6 +273,7 @@ jobs:
 			},
 			versionChecker: &mockVersionChecker{
 				latestVersion: "v3",
+				latestHash:    "abc123def456",
 				err:           nil,
 			},
 			prCreator: &mockPRCreator{
@@ -277,6 +290,7 @@ jobs:
 			},
 			versionChecker: &mockVersionChecker{
 				latestVersion: "v3",
+				latestHash:    "abc123def456",
 				err:           nil,
 			},
 			prCreator: &mockPRCreator{

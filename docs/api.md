@@ -10,11 +10,15 @@ The `updater` package provides the core functionality for scanning, checking, an
 
 ```go
 type ActionReference struct {
-    Owner   string // GitHub owner/organization of the action
-    Name    string // Name of the action
-    Version string // Current version of the action
-    Path    string // Path to the workflow file
-    Line    int    // Line number in the workflow file
+    Owner           string   // GitHub owner/organization of the action
+    Name            string   // Name of the action
+    Version         string   // Current version of the action
+    CommitHash      string   // Commit hash for the action (if using commit reference)
+    Path            string   // Path to the workflow file
+    Line            int      // Line number in the workflow file
+    Comments        []string // Comments associated with the action
+    VersionComment  string   // Comment indicating version (e.g., "# v3")
+    OriginalVersion string   // For tracking version history
 }
 ```
 
@@ -24,12 +28,17 @@ Represents a GitHub Action reference found in a workflow file. This structure co
 
 ```go
 type Update struct {
-    Action      ActionReference // The action to be updated
-    OldVersion  string         // Current version of the action
-    NewVersion  string         // Version to update to
-    FilePath    string         // Path to the workflow file
-    LineNumber  int           // Line number where the update should occur
-    Description string        // Human-readable description of the update
+    Action          ActionReference // The action to be updated
+    OldVersion      string         // Current version of the action
+    NewVersion      string         // Version to update to
+    OldHash         string         // Current commit hash (if using commit reference)
+    NewHash         string         // New commit hash to update to
+    FilePath        string         // Path to the workflow file
+    LineNumber      int           // Line number where the update should occur
+    Description     string        // Human-readable description of the update
+    Comments        []string      // Preserved comments
+    VersionComment  string        // New version comment
+    OriginalVersion string        // For tracking version history
 }
 ```
 
@@ -41,8 +50,15 @@ Represents a pending update for a GitHub Action, containing all information need
 
 ```go
 type VersionChecker interface {
-    GetLatestVersion(ctx context.Context, action ActionReference) (string, error)
-    IsUpdateAvailable(ctx context.Context, action ActionReference) (bool, string, error)
+    // GetLatestVersion returns the latest version and its commit hash for a given action
+    GetLatestVersion(ctx context.Context, action ActionReference) (version string, hash string, error error)
+
+    // IsUpdateAvailable checks if a newer version is available
+    // Returns: available, new version, new hash, error
+    IsUpdateAvailable(ctx context.Context, action ActionReference) (bool, string, string, error)
+
+    // GetCommitHash returns the commit hash for a specific version of an action
+    GetCommitHash(ctx context.Context, action ActionReference, version string) (string, error)
 }
 ```
 
@@ -90,7 +106,9 @@ Handles the creation of pull requests for action updates.
 
 ```go
 type UpdateManager interface {
-    CreateUpdate(ctx context.Context, file string, action ActionReference, latestVersion string) (*Update, error)
+    // CreateUpdate creates an update for a given action and its latest version
+    // Now includes commit hash and preserves comments
+    CreateUpdate(ctx context.Context, file string, action ActionReference, latestVersion string, commitHash string) (*Update, error)
     ApplyUpdates(ctx context.Context, updates []*Update) error
 }
 ```
@@ -125,14 +143,22 @@ func checkForUpdates(checker VersionChecker, action ActionReference) {
     ctx := context.Background()
     
     // Check if an update is available
-    available, latestVersion, err := checker.IsUpdateAvailable(ctx, action)
+    available, latestVersion, latestHash, err := checker.IsUpdateAvailable(ctx, action)
     if err != nil {
         log.Fatalf("Error checking for updates: %v", err)
     }
     
     if available {
-        fmt.Printf("Update available for %s/%s: %s -> %s\n",
-            action.Owner, action.Name, action.Version, latestVersion)
+        if action.CommitHash != "" {
+            fmt.Printf("Update available for %s/%s: %s (%s) -> %s (%s)\n",
+                action.Owner, action.Name, 
+                action.Version, action.CommitHash,
+                latestVersion, latestHash)
+        } else {
+            fmt.Printf("Update available for %s/%s: %s -> %s (%s)\n",
+                action.Owner, action.Name, 
+                action.Version, latestVersion, latestHash)
+        }
     }
 }
 ```
@@ -140,18 +166,34 @@ func checkForUpdates(checker VersionChecker, action ActionReference) {
 ### Creating and Applying Updates
 
 ```go
-func updateWorkflows(manager UpdateManager, creator PRCreator, actions []ActionReference) {
+// Example of updating workflows with standardized comment format
+func updateWorkflows(checker VersionChecker, manager UpdateManager, creator PRCreator, actions []ActionReference) {
     ctx := context.Background()
     var updates []*Update
     
     // Create updates for each action
     for _, action := range actions {
-        update, err := manager.CreateUpdate(ctx, action.Path, action, "v2.0.0")
+        // Get latest version and commit hash
+        latestVersion, latestHash, err := checker.GetLatestVersion(ctx, action)
+        if err != nil {
+            log.Printf("Error getting latest version for %s/%s: %v",
+                action.Owner, action.Name, err)
+            continue
+        }
+
+        // Create update with commit hash and version history
+        update, err := manager.CreateUpdate(ctx, action.Path, action, latestVersion, latestHash)
         if err != nil {
             log.Printf("Error creating update for %s/%s: %v",
                 action.Owner, action.Name, err)
             continue
         }
+        
+        // Example of resulting workflow file:
+        // # Using older hash from v2
+        // # Original version: v2
+        // uses: actions/checkout@abc123  # v3
+        
         updates = append(updates, update)
     }
     
@@ -179,15 +221,70 @@ func updateWorkflows(manager UpdateManager, creator PRCreator, actions []ActionR
 
 3. **Version Management**
    - Use semantic versioning when possible
-   - Handle both tag-based versions and commit SHAs
+   - Handle both tag-based versions and commit hashes
+   - Preserve version information in comments
+   - Track original versions for reference
+   - Use commit hashes for secure referencing
    - Consider version constraints and compatibility
 
-4. **Pull Request Creation**
+4. **Comment Preservation**
+   - Follow the standardized comment format:
+     ```yaml
+     # Using older hash from [old-version]
+     # Original version: [old-version]
+     uses: actions/[name]@[hash]  # [new-version]
+     ```
+   - Preserve version history in comments
+   - Track original versions for reference
+   - Document version changes in PR descriptions
+   - Maintain consistent comment style
+
+5. **Pull Request Creation**
    - Group related updates into a single PR
    - Provide clear descriptions of changes
-   - Include version change details in PR description
+   - Include both version and hash changes in PR description
+   - Document original versions in PR body
+   - Add migration notes if needed
 
-5. **Update Application**
+6. **Update Application**
    - Validate workflow files after applying updates
-   - Maintain original file formatting
+   - Maintain original file formatting and comments
    - Handle concurrent update scenarios properly
+   - Verify commit hash validity
+   - Ensure comment preservation during updates
+
+## Migration Guide
+
+### Updating from Version Tags to Commit Hashes
+
+1. **Existing Format**
+   ```yaml
+   uses: actions/checkout@v3
+   ```
+
+2. **New Format with Version History**
+   ```yaml
+   # Using older hash from v3
+   # Original version: v3
+   uses: actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675  # v4
+   ```
+
+3. **Benefits**
+   - Improved security through immutable references
+   - Version history tracking
+   - Clear upgrade path documentation
+   - Compatibility information preservation
+
+4. **Automatic Migration**
+   The tool will automatically:
+   - Convert version tags to commit hashes
+   - Add version history comments
+   - Preserve original version information
+   - Update PR descriptions with hash details
+
+5. **Manual Steps**
+   No manual steps required. The tool handles all aspects of migration:
+   - Hash resolution
+   - Comment generation
+   - PR creation with detailed descriptions
+   - Version history tracking

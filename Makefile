@@ -5,15 +5,22 @@ GOTEST=$(GOCMD) test
 BINARY_NAME=ghactions-updater
 DOCKER_IMAGE=ghactions-updater
 
-.PHONY: all build test lint clean dockerbuild
+.PHONY: all build test test-e2e lint clean dockerbuild
 
-all: test build
+all: test test-e2e build
 
 build:
 	$(GOBUILD) -o bin/$(BINARY_NAME) ./cmd/ghactions-updater
 
 test:
 	$(GOTEST) -v -cover ./...
+
+test-e2e:
+	@if [ -z "$$GITHUB_TOKEN" ]; then \
+		echo "Error: GITHUB_TOKEN environment variable is required for e2e tests"; \
+		exit 1; \
+	fi
+	$(GOTEST) -v -tags=e2e ./test/e2e/...
 
 lint:
 	golangci-lint run

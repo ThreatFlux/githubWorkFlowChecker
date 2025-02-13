@@ -68,6 +68,51 @@ func TestNewPRCreator(t *testing.T) {
 	}
 }
 
+func TestFormatActionReference(t *testing.T) {
+	creator := &DefaultPRCreator{}
+	tests := []struct {
+		name     string
+		update   *Update
+		expected string
+	}{
+		{
+			name: "basic update with hash",
+			update: &Update{
+				Action: ActionReference{
+					Owner: "actions",
+					Name:  "checkout",
+				},
+				NewHash:    "abc123",
+				NewVersion: "v3",
+			},
+			expected: "uses: actions/checkout@abc123  # v3",
+		},
+		{
+			name: "update with version history",
+			update: &Update{
+				Action: ActionReference{
+					Owner: "actions",
+					Name:  "checkout",
+				},
+				NewHash:         "abc123",
+				NewVersion:      "v4",
+				OriginalVersion: "v2",
+				OldVersion:      "v2",
+			},
+			expected: "# Using older hash from v2\n# Original version: v2\nuses: actions/checkout@abc123  # v4",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := creator.formatActionReference(tt.update)
+			if result != tt.expected {
+				t.Errorf("formatActionReference() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
 func setupTestServer() (*httptest.Server, *DefaultPRCreator) {
 	// Create test server
 	mux := http.NewServeMux()
@@ -143,7 +188,7 @@ func setupTestServer() (*httptest.Server, *DefaultPRCreator) {
 		}
 	})
 
-	// Mock contents endpoint
+	// Mock contents endpoint with version comments
 	mux.HandleFunc("/repos/test-owner/test-repo/contents/", func(w http.ResponseWriter, r *http.Request) {
 		content := base64.StdEncoding.EncodeToString([]byte(`name: Test Workflow
 on: [push]
@@ -151,7 +196,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2`))
+      # Using older hash from v1
+      # Original version: v1
+      - uses: actions/checkout@abc123  # v2`))
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{
 			"type": "file",
@@ -489,11 +536,14 @@ func TestCreatePR(t *testing.T) {
 				Name:    "checkout",
 				Version: "v2",
 			},
-			OldVersion:  "v2",
-			NewVersion:  "v3",
-			FilePath:    ".github/workflows/test.yml",
-			LineNumber:  7,
-			Description: "Update actions/checkout from v2 to v3",
+			OldVersion:      "v2",
+			NewVersion:      "v3",
+			OldHash:         "def456",
+			NewHash:         "abc123",
+			FilePath:        ".github/workflows/test.yml",
+			LineNumber:      7,
+			Description:     "Update actions/checkout from v2 to v3",
+			OriginalVersion: "v1",
 		},
 	}
 
@@ -531,6 +581,8 @@ func TestCreatePR_RepoError(t *testing.T) {
 			},
 			OldVersion:  "v2",
 			NewVersion:  "v3",
+			OldHash:     "def456",
+			NewHash:     "abc123",
 			FilePath:    ".github/workflows/test.yml",
 			LineNumber:  7,
 			Description: "Update actions/checkout from v2 to v3",
@@ -556,6 +608,8 @@ func TestCreatePR_BranchError(t *testing.T) {
 			},
 			OldVersion:  "v2",
 			NewVersion:  "v3",
+			OldHash:     "def456",
+			NewHash:     "abc123",
 			FilePath:    ".github/workflows/test.yml",
 			LineNumber:  7,
 			Description: "Update actions/checkout from v2 to v3",
@@ -581,6 +635,8 @@ func TestCreatePR_ContentsError(t *testing.T) {
 			},
 			OldVersion:  "v2",
 			NewVersion:  "v3",
+			OldHash:     "def456",
+			NewHash:     "abc123",
 			FilePath:    ".github/workflows/test.yml",
 			LineNumber:  7,
 			Description: "Update actions/checkout from v2 to v3",
@@ -606,6 +662,8 @@ func TestCreatePR_BlobError(t *testing.T) {
 			},
 			OldVersion:  "v2",
 			NewVersion:  "v3",
+			OldHash:     "def456",
+			NewHash:     "abc123",
 			FilePath:    ".github/workflows/test.yml",
 			LineNumber:  7,
 			Description: "Update actions/checkout from v2 to v3",
@@ -631,6 +689,8 @@ func TestCreatePR_PRError(t *testing.T) {
 			},
 			OldVersion:  "v2",
 			NewVersion:  "v3",
+			OldHash:     "def456",
+			NewHash:     "abc123",
 			FilePath:    ".github/workflows/test.yml",
 			LineNumber:  7,
 			Description: "Update actions/checkout from v2 to v3",
@@ -687,19 +747,27 @@ func TestGeneratePRBody(t *testing.T) {
 				Name:    "checkout",
 				Version: "v2",
 			},
-			OldVersion: "v2",
-			NewVersion: "v3",
+			OldVersion:      "v2",
+			NewVersion:      "v3",
+			OldHash:         "def456",
+			NewHash:         "abc123",
+			OriginalVersion: "v1",
 		},
 	}
 
 	body := creator.generatePRBody(updates)
-	if !strings.Contains(body, "actions/checkout") {
-		t.Error("PR body does not contain action reference")
+	expectedContents := []string{
+		"actions/checkout",
+		"v2 (def456)",
+		"v3 (abc123)",
+		"Original version: v1",
+		"🔒 This PR uses commit hashes",
+		"🤖",
 	}
-	if !strings.Contains(body, "v2 to v3") {
-		t.Error("PR body does not contain version update")
-	}
-	if !strings.Contains(body, "🤖") {
-		t.Error("PR body does not contain bot emoji")
+
+	for _, expected := range expectedContents {
+		if !strings.Contains(body, expected) {
+			t.Errorf("PR body missing expected content: %s", expected)
+		}
 	}
 }

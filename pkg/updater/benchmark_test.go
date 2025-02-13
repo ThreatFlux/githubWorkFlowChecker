@@ -3,12 +3,15 @@ package updater
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
+	"strings"
 	"testing"
 	"time"
 
@@ -69,23 +72,47 @@ func BenchmarkVersionChecker(b *testing.B) {
 		TagName: &tagName,
 	}
 
-	// Create version checker with mock
+	// Create version checker with mocks
+	client := github.NewClient(nil)
+	client.BaseURL, _ = url.Parse("http://localhost/")
 	checker := &DefaultVersionChecker{
-		client: github.NewClient(nil),
+		client: client,
 		mockGetLatestRelease: func(ctx context.Context, owner, repo string) (*github.RepositoryRelease, *github.Response, error) {
 			return mockRelease, &github.Response{Response: &http.Response{StatusCode: http.StatusOK}}, nil
 		},
 	}
 
+	// Set up mock transport for Git.GetRef
+	client.Client().Transport = &mockTransport{
+		Response: &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"object":{"sha":"abc123def456","type":"commit"}}`)),
+		},
+	}
+
 	action := ActionReference{
-		Owner:   "actions",
-		Name:    "checkout",
-		Version: "v3",
+		Owner:      "actions",
+		Name:       "checkout",
+		Version:    "v3",
+		CommitHash: "def456abc123",
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _, err := checker.IsUpdateAvailable(context.Background(), action)
+		// Test GetLatestVersion
+		_, _, err := checker.GetLatestVersion(context.Background(), action)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		// Test IsUpdateAvailable
+		_, _, _, err = checker.IsUpdateAvailable(context.Background(), action)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		// Test GetCommitHash
+		_, err = checker.GetCommitHash(context.Background(), action, "v4")
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -99,6 +126,9 @@ type mockTransport struct {
 }
 
 func (t *mockTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	if t.Response != nil && t.Response.Body == nil {
+		t.Response.Body = io.NopCloser(strings.NewReader("{}"))
+	}
 	return t.Response, t.Error
 }
 

@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
+  test-unit:
     name: Test
     runs-on: ubuntu-latest
     steps:
@@ -30,9 +30,30 @@ jobs:
         with:
           version: latest
 
+  test-e2e:
+    name: End-to-End Tests
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.0'
+          check-latest: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run e2e tests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make test-e2e
+
   build:
     name: Build
-    needs: test
+    needs: [test-unit, test-e2e]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
