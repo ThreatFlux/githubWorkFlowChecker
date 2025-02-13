@@ -13,6 +13,8 @@ import (
 // DefaultVersionChecker implements the VersionChecker interface using GitHub API
 type DefaultVersionChecker struct {
 	client *github.Client
+	// For testing
+	mockGetLatestRelease func(ctx context.Context, owner, repo string) (*github.RepositoryRelease, *github.Response, error)
 }
 
 // NewDefaultVersionChecker creates a new DefaultVersionChecker instance
@@ -32,7 +34,15 @@ func NewDefaultVersionChecker(token string) *DefaultVersionChecker {
 // GetLatestVersion returns the latest version for a given action
 func (c *DefaultVersionChecker) GetLatestVersion(ctx context.Context, action ActionReference) (string, error) {
 	// First try to get the latest release
-	release, resp, err := c.client.Repositories.GetLatestRelease(ctx, action.Owner, action.Name)
+	var release *github.RepositoryRelease
+	var resp *github.Response
+	var err error
+
+	if c.mockGetLatestRelease != nil {
+		release, resp, err = c.mockGetLatestRelease(ctx, action.Owner, action.Name)
+	} else {
+		release, resp, err = c.client.Repositories.GetLatestRelease(ctx, action.Owner, action.Name)
+	}
 	if err == nil && release != nil && release.TagName != nil {
 		return *release.TagName, nil
 	}

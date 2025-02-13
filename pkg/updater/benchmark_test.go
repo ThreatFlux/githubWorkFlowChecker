@@ -63,15 +63,25 @@ func BenchmarkScanWorkflows(b *testing.B) {
 }
 
 func BenchmarkVersionChecker(b *testing.B) {
-	checker := NewVersionChecker("test-token")
+	// Create mock release
+	tagName := "v4"
+	mockRelease := &github.RepositoryRelease{
+		TagName: &tagName,
+	}
+
+	// Create version checker with mock
+	checker := &DefaultVersionChecker{
+		client: github.NewClient(nil),
+		mockGetLatestRelease: func(ctx context.Context, owner, repo string) (*github.RepositoryRelease, *github.Response, error) {
+			return mockRelease, &github.Response{Response: &http.Response{StatusCode: http.StatusOK}}, nil
+		},
+	}
+
 	action := ActionReference{
 		Owner:   "actions",
 		Name:    "checkout",
 		Version: "v3",
 	}
-
-	// Mock GitHub API for testing
-	checker.(*DefaultVersionChecker).client = &github.Client{}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -80,6 +90,16 @@ func BenchmarkVersionChecker(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+}
+
+// mockTransport implements http.RoundTripper for testing
+type mockTransport struct {
+	Response *http.Response
+	Error    error
+}
+
+func (t *mockTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return t.Response, t.Error
 }
 
 func BenchmarkMemoryUsage(b *testing.B) {
