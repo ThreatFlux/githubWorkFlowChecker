@@ -2,64 +2,122 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [ main ]
 
 jobs:
+  wait-for-tests:
+    name: Wait for Tests
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.head_commit.message, 'skip ci') }}
+    steps:
+      - name: Wait for tests
+        uses: lewagon/wait-on-check-action@e106e5c43e8ca1edea6383a39a01c5ca495fd812 # v1.3.1
+        with:
+          ref: ${{ github.ref }}
+          check-name: 'Test'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          allowed-conclusions: success,skipped
+
+      - name: Wait for E2E tests
+        uses: lewagon/wait-on-check-action@e106e5c43e8ca1edea6383a39a01c5ca495fd812 # v1.3.1
+        with:
+          ref: ${{ github.ref }}
+          check-name: 'End-to-End Tests'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          allowed-conclusions: success,skipped
+
   release:
     name: Create Release
+    needs: wait-for-tests
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.0'
-          check-latest: true
+          cache: true
 
-      - name: Install dependencies
-        run: go mod download
-
-      - name: Run tests
-        run: make test
-
-      - name: Build binaries
+      - name: Generate version
+        id: version
         run: |
-          GOOS=linux GOARCH=amd64 make build
-          mv bin/ghactions-updater bin/ghactions-updater-linux-amd64
-          GOOS=darwin GOARCH=amd64 make build
-          mv bin/ghactions-updater bin/ghactions-updater-darwin-amd64
-          GOOS=windows GOARCH=amd64 make build
-          mv bin/ghactions-updater bin/ghactions-updater-windows-amd64.exe
+          DATE=$(date '+%Y%m%d')
+          LAST_TAG=$(git tag --list "${DATE}.*" --sort=-version:refname | head -n 1)
+          
+          if [ -z "$LAST_TAG" ]; then
+            # First release of the day
+            VERSION="${DATE}.release.1"
+          else
+            # Increment patch number
+            PATCH=$(echo $LAST_TAG | awk -F. '{print $NF}')
+            NEXT_PATCH=$((PATCH + 1))
+            VERSION="${DATE}.release.${NEXT_PATCH}"
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version will be: $VERSION"
+
+      - name: Update CHANGELOG
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          sed -i "s/## \[Unreleased\]/## [Unreleased]\n\n## [$VERSION] - $(date '+%Y-%m-%d')/" CHANGELOG.md
+          echo "[${VERSION}]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/${VERSION}" >> CHANGELOG.md
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add CHANGELOG.md
+          git commit -m "Update CHANGELOG for release ${VERSION}"
+          git push
+
+      - name: Build
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o ghactions-updater-linux-amd64 ./cmd/ghactions-updater
+          GOOS=darwin GOARCH=amd64 go build -o ghactions-updater-darwin-amd64 ./cmd/ghactions-updater
+          GOOS=windows GOARCH=amd64 go build -o ghactions-updater-windows-amd64.exe ./cmd/ghactions-updater
 
       - name: Build and push Docker image
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          make dockerbuild
-          docker tag ghactions-updater:latest ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-          docker tag ghactions-updater:latest ghcr.io/${{ github.repository }}:latest
-          docker push ghcr.io/${{ github.repository }}:${{ github.ref_name }}
-          docker push ghcr.io/${{ github.repository }}:latest
-
-      - name: Generate release notes
-        run: |
-          echo "## Changes in this release" > release_notes.md
-          echo "" >> release_notes.md
-          git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"* %s" >> release_notes.md
+          VERSION=${{ steps.version.outputs.version }}
+          echo $GITHUB_TOKEN | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker build -t ghcr.io/threatflux/ghactions-updater:$VERSION .
+          docker tag ghcr.io/threatflux/ghactions-updater:$VERSION ghcr.io/threatflux/ghactions-updater:latest
+          docker push ghcr.io/threatflux/ghactions-updater:$VERSION
+          docker push ghcr.io/threatflux/ghactions-updater:latest
 
       - name: Create Release
+        id: create_release
+        uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          release_name: Release ${{ steps.version.outputs.version }}
+          body: |
+            Release ${{ steps.version.outputs.version }}
+            
+            ## Changes
+            ${{ github.event.head_commit.message }}
+            
+            For full details, see the [CHANGELOG](CHANGELOG.md)
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            bin/ghactions-updater-linux-amd64
-            bin/ghactions-updater-darwin-amd64
-            bin/ghactions-updater-windows-amd64.exe
-          body_path: release_notes.md
-          draft: false
-          prerelease: false
+            ghactions-updater-linux-amd64
+            ghactions-updater-darwin-amd64
+            ghactions-updater-windows-amd64.exe
+          tag_name: ${{ steps.version.outputs.version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

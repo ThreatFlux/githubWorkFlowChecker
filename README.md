@@ -1,5 +1,11 @@
 # GitHub Actions Workflow Checker
 
+[![CI](https://github.com/ThreatFlux/githubWorkFlowChecker/actions/workflows/ci.yml/badge.svg)](https://github.com/ThreatFlux/githubWorkFlowChecker/actions/workflows/ci.yml)
+[![Release](https://github.com/ThreatFlux/githubWorkFlowChecker/actions/workflows/release.yml/badge.svg)](https://github.com/ThreatFlux/githubWorkFlowChecker/actions/workflows/release.yml)
+[![codecov](https://codecov.io/gh/ThreatFlux/githubWorkFlowChecker/branch/main/graph/badge.svg)](https://codecov.io/gh/ThreatFlux/githubWorkFlowChecker)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ThreatFlux/githubWorkFlowChecker)](https://goreportcard.com/report/github.com/ThreatFlux/githubWorkFlowChecker)
+[![GoDoc](https://godoc.org/github.com/ThreatFlux/githubWorkFlowChecker?status.svg)](https://godoc.org/github.com/ThreatFlux/githubWorkFlowChecker)
+
 A tool to automatically check and update GitHub Actions workflow dependencies. It scans workflow files for action references, checks for newer versions, and creates pull requests with updates.
 
 ## Features
