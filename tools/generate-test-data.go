@@ -57,7 +57,10 @@ func main() {
 
 	outputDir := os.Args[1]
 	count := 0
-	fmt.Sscanf(os.Args[2], "%d", &count)
+	if _, err := fmt.Sscanf(os.Args[2], "%d", &count); err != nil {
+		fmt.Printf("Error parsing count: %v\n", err)
+		os.Exit(1)
+	}
 
 	if count <= 0 {
 		fmt.Println("Workflow count must be positive")

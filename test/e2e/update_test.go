@@ -167,9 +167,10 @@ jobs:
 					t.Fatalf("Failed to create workflow file: %v", err)
 				}
 
-				// Get the relative path
+				// Get the relative path and use it for logging
 				relativeFile := strings.TrimPrefix(workflowFile, repoPath)
 				relativeFile = strings.TrimPrefix(relativeFile, "/")
+				t.Logf("Processing workflow file: %s", relativeFile)
 
 				// Parse the workflow file
 				actions, err := scanner.ParseActionReferences(workflowFile)

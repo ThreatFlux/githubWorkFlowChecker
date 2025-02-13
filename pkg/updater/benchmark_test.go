@@ -16,20 +16,7 @@ import (
 	"time"
 
 	"github.com/google/go-github/v58/github"
-	"golang.org/x/oauth2"
 )
-
-// NewVersionChecker creates a new version checker instance
-func NewVersionChecker(token string) VersionChecker {
-	client := github.NewClient(nil)
-	if token != "" {
-		ts := oauth2.StaticTokenSource(
-			&oauth2.Token{AccessToken: token},
-		)
-		client = github.NewClient(oauth2.NewClient(context.Background(), ts))
-	}
-	return &DefaultVersionChecker{client: client}
-}
 
 func BenchmarkScanWorkflows(b *testing.B) {
 	// Set up test data directory
@@ -225,11 +212,15 @@ func init() {
 		if err != nil {
 			panic(err)
 		}
-		pprof.StartCPUProfile(f)
+		if err := pprof.StartCPUProfile(f); err != nil {
+			panic(err)
+		}
 		defer pprof.StopCPUProfile()
 
 		go func() {
-			http.ListenAndServe("localhost:6060", nil)
+			if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+				fmt.Printf("pprof server error: %v\n", err)
+			}
 		}()
 	}
 }

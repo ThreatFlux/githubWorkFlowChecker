@@ -113,6 +113,11 @@ func TestFormatActionReference(t *testing.T) {
 	}
 }
 
+func writeJSON(w http.ResponseWriter, data string) error {
+	_, err := w.Write([]byte(data))
+	return err
+}
+
 func setupTestServer() (*httptest.Server, *DefaultPRCreator) {
 	// Create test server
 	mux := http.NewServeMux()
@@ -120,8 +125,8 @@ func setupTestServer() (*httptest.Server, *DefaultPRCreator) {
 
 	// Create client pointing to test server
 	client := github.NewClient(nil)
-	url, _ := url.Parse(server.URL + "/")
-	client.BaseURL = url
+	requestUrl, _ := url.Parse(server.URL + "/")
+	client.BaseURL = requestUrl
 
 	creator := &DefaultPRCreator{
 		client: client,
@@ -132,43 +137,55 @@ func setupTestServer() (*httptest.Server, *DefaultPRCreator) {
 	// Mock repository endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"default_branch": "main"}`))
+		if err := writeJSON(w, `{"default_branch": "main"}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock ref endpoints for getting and updating branches
 	mux.HandleFunc("/repos/test-owner/test-repo/git/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/ref/heads/main") || strings.Contains(r.URL.Path, "/refs/heads/main") {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{
+			if err := writeJSON(w, `{
 				"ref": "refs/heads/main",
 				"object": {
 					"sha": "test-sha",
 					"type": "commit",
-					"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
+					"request_url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 				}
-			}`))
+			}`); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		} else if strings.Contains(r.URL.Path, "/ref/heads/action-updates-") || strings.Contains(r.URL.Path, "/refs/heads/action-updates-") {
 			switch r.Method {
 			case "GET":
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{
+				if err := writeJSON(w, `{
 					"ref": "refs/heads/action-updates",
 					"object": {
 						"sha": "test-sha",
 						"type": "commit",
-						"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
+						"request_url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 					}
-				}`))
+				}`); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
 			case "PATCH":
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{
+				if err := writeJSON(w, `{
 					"ref": "refs/heads/action-updates",
 					"object": {
 						"sha": "new-commit-sha",
 						"type": "commit",
-						"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/new-commit-sha"
+						"request_url": "https://api.github.com/repos/test-owner/test-repo/git/commits/new-commit-sha"
 					}
-				}`))
+				}`); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
 			}
 		}
 	})
@@ -177,14 +194,17 @@ func setupTestServer() (*httptest.Server, *DefaultPRCreator) {
 	mux.HandleFunc("/repos/test-owner/test-repo/git/refs", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
 			w.WriteHeader(http.StatusCreated)
-			w.Write([]byte(`{
+			if err := writeJSON(w, `{
 				"ref": "refs/heads/action-updates",
 				"object": {
 					"sha": "test-sha",
 					"type": "commit",
-					"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
+					"request_url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 				}
-			}`))
+			}`); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
 	})
 
@@ -200,44 +220,62 @@ jobs:
       # Original version: v1
       - uses: actions/checkout@abc123  # v2`))
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
+		if err := writeJSON(w, `{
 			"type": "file",
 			"encoding": "base64",
-			"content": "` + content + `"
-		}`))
+			"content": "`+content+`"
+		}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock blob creation endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo/git/blobs", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"sha": "new-blob-sha"}`))
+		if err := writeJSON(w, `{"sha": "new-blob-sha"}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock tree creation endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo/git/trees", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{
+		if err := writeJSON(w, `{
 			"sha": "new-tree-sha",
 			"tree": [{"path": "test.yml", "mode": "100644", "type": "blob", "sha": "new-blob-sha"}]
-		}`))
+		}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock commit creation endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo/git/commits", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"sha": "new-commit-sha"}`))
+		if err := writeJSON(w, `{"sha": "new-commit-sha"}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock pull request creation endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"number": 1}`))
+		if err := writeJSON(w, `{"number": 1}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock labels endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo/issues/1/labels", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[{"name": "dependencies"}, {"name": "automated-pr"}]`))
+		if err := writeJSON(w, `[{"name": "dependencies"}, {"name": "automated-pr"}]`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	return server, creator
@@ -262,7 +300,10 @@ func setupErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 	// Mock repository endpoint with error
 	mux.HandleFunc("/repos/test-owner/test-repo", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(`{"message": "Not Found"}`))
+		if err := writeJSON(w, `{"message": "Not Found"}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	return server, creator
@@ -287,13 +328,19 @@ func setupBranchErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 	// Mock repository endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"default_branch": "main"}`))
+		if err := writeJSON(w, `{"default_branch": "main"}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock ref endpoint with error
 	mux.HandleFunc("/repos/test-owner/test-repo/git/refs", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"message": "Internal Server Error"}`))
+		if err := writeJSON(w, `{"message": "Internal Server Error"}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	return server, creator
@@ -318,39 +365,51 @@ func setupContentsErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 	// Mock repository endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"default_branch": "main"}`))
+		if err := writeJSON(w, `{"default_branch": "main"}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock ref endpoints
 	mux.HandleFunc("/repos/test-owner/test-repo/git/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
+		if err := writeJSON(w, `{
 			"ref": "refs/heads/main",
 			"object": {
 				"sha": "test-sha",
 				"type": "commit",
 				"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 			}
-		}`))
+		}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock ref creation endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo/git/refs", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{
+		if err := writeJSON(w, `{
 			"ref": "refs/heads/action-updates",
 			"object": {
 				"sha": "test-sha",
 				"type": "commit",
 				"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 			}
-		}`))
+		}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock contents endpoint with error
 	mux.HandleFunc("/repos/test-owner/test-repo/contents/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(`{"message": "Not Found"}`))
+		if err := writeJSON(w, `{"message": "Not Found"}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	return server, creator
@@ -375,33 +434,42 @@ func setupBlobErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 	// Mock repository endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"default_branch": "main"}`))
+		if err := writeJSON(w, `{"default_branch": "main"}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock ref endpoints
 	mux.HandleFunc("/repos/test-owner/test-repo/git/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
+		if err := writeJSON(w, `{
 			"ref": "refs/heads/main",
 			"object": {
 				"sha": "test-sha",
 				"type": "commit",
 				"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 			}
-		}`))
+		}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock ref creation endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo/git/refs", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{
+		if err := writeJSON(w, `{
 			"ref": "refs/heads/action-updates",
 			"object": {
 				"sha": "test-sha",
 				"type": "commit",
 				"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 			}
-		}`))
+		}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock contents endpoint
@@ -414,17 +482,23 @@ jobs:
     steps:
       - uses: actions/checkout@v2`))
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
+		if err := writeJSON(w, `{
 			"type": "file",
 			"encoding": "base64",
-			"content": "` + content + `"
-		}`))
+			"content": "`+content+`"
+		}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock blob creation endpoint with error
 	mux.HandleFunc("/repos/test-owner/test-repo/git/blobs", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"message": "Internal Server Error"}`))
+		if err := writeJSON(w, `{"message": "Internal Server Error"}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	return server, creator
@@ -449,33 +523,42 @@ func setupPRErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 	// Mock repository endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"default_branch": "main"}`))
+		if err := writeJSON(w, `{"default_branch": "main"}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock ref endpoints
 	mux.HandleFunc("/repos/test-owner/test-repo/git/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
+		if err := writeJSON(w, `{
 			"ref": "refs/heads/main",
 			"object": {
 				"sha": "test-sha",
 				"type": "commit",
 				"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 			}
-		}`))
+		}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock ref creation endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo/git/refs", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{
+		if err := writeJSON(w, `{
 			"ref": "refs/heads/action-updates",
 			"object": {
 				"sha": "test-sha",
 				"type": "commit",
 				"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 			}
-		}`))
+		}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock contents endpoint
@@ -488,38 +571,53 @@ jobs:
     steps:
       - uses: actions/checkout@v2`))
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{
+		if err := writeJSON(w, `{
 			"type": "file",
 			"encoding": "base64",
-			"content": "` + content + `"
-		}`))
+			"content": "`+content+`"
+		}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock blob creation endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo/git/blobs", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"sha": "new-blob-sha"}`))
+		if err := writeJSON(w, `{"sha": "new-blob-sha"}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock tree creation endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo/git/trees", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{
+		if err := writeJSON(w, `{
 			"sha": "new-tree-sha",
 			"tree": [{"path": "test.yml", "mode": "100644", "type": "blob", "sha": "new-blob-sha"}]
-		}`))
+		}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock commit creation endpoint
 	mux.HandleFunc("/repos/test-owner/test-repo/git/commits", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"sha": "new-commit-sha"}`))
+		if err := writeJSON(w, `{"sha": "new-commit-sha"}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	// Mock pull request creation endpoint with error
 	mux.HandleFunc("/repos/test-owner/test-repo/pulls", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
-		w.Write([]byte(`{"message": "Validation Failed"}`))
+		if err := writeJSON(w, `{"message": "Validation Failed"}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	})
 
 	return server, creator

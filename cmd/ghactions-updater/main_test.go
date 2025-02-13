@@ -13,9 +13,6 @@ import (
 	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/updater"
 )
 
-// Override os.Exit for testing
-var osExit = os.Exit
-
 type mockVersionChecker struct {
 	latestVersion string
 	latestHash    string
@@ -150,16 +147,31 @@ jobs:
 				}
 			}
 
-			// Save original working directory
+			// Create and change to a temporary working directory
+			workingDir, err := os.MkdirTemp("", "test-working-dir")
+			if err != nil {
+				t.Fatalf("Failed to create working directory: %v", err)
+			}
+			defer os.RemoveAll(workingDir)
+
+			if err := os.Chdir(workingDir); err != nil {
+				t.Fatalf("Failed to change to working directory: %v", err)
+			}
+
+			// Save original working directory to restore later
 			oldWd, err := os.Getwd()
 			if err != nil {
 				t.Fatalf("Failed to get current working directory: %v", err)
 			}
-			defer os.Chdir(oldWd)
+			defer func() {
+				if err := os.Chdir(oldWd); err != nil {
+					t.Errorf("Failed to restore working directory: %v", err)
+				}
+			}()
 
-			// Change to temp directory
+			// Change to temp directory for test
 			if err := os.Chdir(tempDir); err != nil {
-				t.Fatalf("Failed to change working directory: %v", err)
+				t.Fatalf("Failed to change to temp directory: %v", err)
 			}
 
 			// Reset and set up test flags
@@ -170,7 +182,9 @@ jobs:
 			token = flag.String("token", "", "GitHub token")
 
 			os.Args = []string{"cmd", "-owner=test-owner", "-repo-name=test-repo", "-token=test-token"}
-			flag.CommandLine.Parse(os.Args[1:])
+			if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
+				t.Fatalf("Failed to parse command line flags: %v", err)
+			}
 
 			// Save and restore factories
 			oldVersionFactory := versionCheckerFactory
@@ -232,19 +246,34 @@ jobs:
 		t.Fatalf("Failed to create test workflow file: %v", err)
 	}
 
+	// Create and change to a temporary working directory
+	workingDir, err := os.MkdirTemp("", "test-working-dir")
+	if err != nil {
+		t.Fatalf("Failed to create working directory: %v", err)
+	}
+	defer os.RemoveAll(workingDir)
+
+	if err := os.Chdir(workingDir); err != nil {
+		t.Fatalf("Failed to change to working directory: %v", err)
+	}
+
 	// Save original working directory and args
 	oldWd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current working directory: %v", err)
 	}
-	defer os.Chdir(oldWd)
+	defer func() {
+		if err := os.Chdir(oldWd); err != nil {
+			t.Errorf("Failed to restore working directory: %v", err)
+		}
+	}()
 
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
 
-	// Change to temp directory
+	// Change to temp directory for test
 	if err := os.Chdir(tempDir); err != nil {
-		t.Fatalf("Failed to change working directory: %v", err)
+		t.Fatalf("Failed to change to temp directory: %v", err)
 	}
 
 	// Save and restore factories
@@ -342,7 +371,9 @@ jobs:
 			}
 
 			// Parse flags
-			flag.CommandLine.Parse(tt.args[1:])
+			if err := flag.CommandLine.Parse(tt.args[1:]); err != nil {
+				t.Fatalf("Failed to parse flags: %v", err)
+			}
 
 			// Capture log.Fatal calls
 			var logBuf strings.Builder
@@ -412,16 +443,31 @@ jobs:
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
 
-	// Save original working directory
+	// Create and change to a temporary working directory
+	workingDir, err := os.MkdirTemp("", "test-working-dir")
+	if err != nil {
+		t.Fatalf("Failed to create working directory: %v", err)
+	}
+	defer os.RemoveAll(workingDir)
+
+	if err := os.Chdir(workingDir); err != nil {
+		t.Fatalf("Failed to change to working directory: %v", err)
+	}
+
+	// Save original working directory to restore later
 	oldWd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current working directory: %v", err)
 	}
-	defer os.Chdir(oldWd)
+	defer func() {
+		if err := os.Chdir(oldWd); err != nil {
+			t.Errorf("Failed to restore working directory: %v", err)
+		}
+	}()
 
-	// Change to temp directory
+	// Change to temp directory for test
 	if err := os.Chdir(tempDir); err != nil {
-		t.Fatalf("Failed to change working directory: %v", err)
+		t.Fatalf("Failed to change to temp directory: %v", err)
 	}
 
 	tests := []struct {
@@ -489,7 +535,9 @@ jobs:
 			token = flag.String("token", "", "GitHub token")
 
 			// Parse flags
-			flag.CommandLine.Parse(tt.args[1:])
+			if err := flag.CommandLine.Parse(tt.args[1:]); err != nil {
+				t.Fatalf("Failed to parse command line flags: %v", err)
+			}
 			err := validateFlags()
 			if tt.wantErr {
 				if err == nil {
