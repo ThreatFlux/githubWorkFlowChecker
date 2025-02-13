@@ -5,9 +5,21 @@ GOTEST=$(GOCMD) test
 BINARY_NAME=ghactions-updater
 DOCKER_IMAGE=ghactions-updater
 
-.PHONY: all build test test-e2e lint clean dockerbuild
+.PHONY: all build test test-e2e lint clean dockerbuild vuln-check
 
-all: test test-e2e build
+# Install vulnerability checking tools if not present
+.PHONY: install-vuln-tools
+install-vuln-tools:
+	@which govulncheck > /dev/null || go install golang.org/x/vuln/cmd/govulncheck@latest
+	@which nancy > /dev/null || go install github.com/sonatype-nexus-community/nancy@latest
+
+all: test test-e2e vuln-check build
+
+# Vulnerability scanning
+vuln-check: install-vuln-tools
+	@echo "Running vulnerability checks..."
+	govulncheck ./...
+	go list -json -deps ./... | nancy sleuth
 
 build:
 	$(GOBUILD) -o bin/$(BINARY_NAME) ./cmd/ghactions-updater
