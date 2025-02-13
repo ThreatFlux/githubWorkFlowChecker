@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.0'
+          check-latest: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: make test
+
+      - name: Build binaries
+        run: |
+          GOOS=linux GOARCH=amd64 make build
+          mv bin/ghactions-updater bin/ghactions-updater-linux-amd64
+          GOOS=darwin GOARCH=amd64 make build
+          mv bin/ghactions-updater bin/ghactions-updater-darwin-amd64
+          GOOS=windows GOARCH=amd64 make build
+          mv bin/ghactions-updater bin/ghactions-updater-windows-amd64.exe
+
+      - name: Build and push Docker image
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          make dockerbuild
+          docker tag ghactions-updater:latest ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          docker tag ghactions-updater:latest ghcr.io/${{ github.repository }}:latest
+          docker push ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          docker push ghcr.io/${{ github.repository }}:latest
+
+      - name: Generate release notes
+        run: |
+          echo "## Changes in this release" > release_notes.md
+          echo "" >> release_notes.md
+          git log $(git describe --tags --abbrev=0 HEAD^)..HEAD --pretty=format:"* %s" >> release_notes.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            bin/ghactions-updater-linux-amd64
+            bin/ghactions-updater-darwin-amd64
+            bin/ghactions-updater-windows-amd64.exe
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

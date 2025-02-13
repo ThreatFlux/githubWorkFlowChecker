@@ -1,0 +1,62 @@
+name: Branch Protection Check
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  check:
+    name: Branch Protection Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.0'
+          check-latest: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: make test
+
+      - name: Run linter
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+
+      - name: Check commit message format
+        run: |
+          echo "Checking commit messages..."
+          for commit in $(git rev-list ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}); do
+            msg=$(git log --format=%B -n 1 $commit)
+            if ! echo "$msg" | grep -qE "^(feat|fix|docs|style|refactor|test|chore)(\([a-z]+\))?: .+$"; then
+              echo "Invalid commit message format: $msg"
+              echo "Commit messages must follow the Conventional Commits format:"
+              echo "type(scope): description"
+              echo "Example: feat(scanner): add support for new action format"
+              exit 1
+            fi
+          done
+
+      - name: Check file changes
+        run: |
+          echo "Checking modified files..."
+          git diff --name-only ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }} | while read file; do
+            if [[ "$file" =~ ^(LICENSE|README\.md|CONTRIBUTING\.md|docs/.*|\.github/workflows/.*|Makefile)$ ]]; then
+              echo "Changes to $file require maintainer review"
+            fi
+          done
+
+      - name: Verify test coverage
+        run: |
+          echo "Checking test coverage..."
+          go test -coverprofile=coverage.out ./...
+          coverage=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          if (( $(echo "$coverage < 80" | bc -l) )); then
+            echo "Test coverage is below 80%: $coverage%"
+            exit 1
+          fi
