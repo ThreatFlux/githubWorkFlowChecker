@@ -13,7 +13,7 @@ build:
 	$(GOBUILD) -o bin/$(BINARY_NAME) ./cmd/ghactions-updater
 
 test:
-	$(GOTEST) -v -cover ./...
+	$(GOTEST) -v -cover ./cmd/... ./pkg/... ./tools/...
 
 test-e2e:
 	@if [ -z "$$GITHUB_TOKEN" ]; then \

@@ -127,12 +127,13 @@ jobs:
 				Name:    "checkout",
 				Version: "v2",
 			},
-			OldVersion:  "v2",
-			NewVersion:  "v3",
-			NewHash:     "def456",
-			FilePath:    workflowFile,
-			LineNumber:  7,
-			Description: "Update actions/checkout from v2 to v3",
+			OldVersion:      "v2",
+			NewVersion:      "v3",
+			NewHash:         "def456",
+			FilePath:        workflowFile,
+			LineNumber:      7,
+			Description:     "Update actions/checkout from v2 to v3",
+			OriginalVersion: "v2",
 		},
 		{
 			Action: ActionReference{
@@ -140,12 +141,13 @@ jobs:
 				Name:    "setup-node",
 				Version: "v2",
 			},
-			OldVersion:  "v2",
-			NewVersion:  "v3",
-			NewHash:     "uvw456",
-			FilePath:    workflowFile,
-			LineNumber:  8,
-			Description: "Update actions/setup-node from v2 to v3",
+			OldVersion:      "v2",
+			NewVersion:      "v3",
+			NewHash:         "uvw456",
+			FilePath:        workflowFile,
+			LineNumber:      8,
+			Description:     "Update actions/setup-node from v2 to v3",
+			OriginalVersion: "v2",
 		},
 	}
 
@@ -169,8 +171,11 @@ jobs:
 	if !strings.Contains(updatedContent, "actions/setup-node@uvw456") {
 		t.Error("Update for setup-node action hash was not applied")
 	}
-	if !strings.Contains(updatedContent, "# Current version: v3") {
-		t.Error("Version comments were not added")
+	if !strings.Contains(updatedContent, "# Using older hash from v2") {
+		t.Error("Version history comment was not added")
+	}
+	if !strings.Contains(updatedContent, "# Original version: v2") {
+		t.Error("Original version comment was not added")
 	}
 }
 

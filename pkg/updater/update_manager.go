@@ -30,11 +30,11 @@ func (m *DefaultUpdateManager) CreateUpdate(ctx context.Context, file string, ac
 		originalVersion = action.CommitHash
 	}
 
-	// Add version history comments
-	comments = []string{
-		fmt.Sprintf("# Using older hash from %s", originalVersion),
-		fmt.Sprintf("# Original version: %s", originalVersion),
-	}
+		// Add version history comments
+		comments = append(comments,
+			fmt.Sprintf("# Using older hash from %s", originalVersion),
+			fmt.Sprintf("# Original version: %s", originalVersion),
+		)
 
 	return &Update{
 		Action:          action,
@@ -102,14 +102,24 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 		newRef := fmt.Sprintf("%s/%s@%s", update.Action.Owner, update.Action.Name, update.NewHash)
 		mainPart = strings.Replace(mainPart, oldRef, newRef, -1)
 
-		// Add version history comments
-		comments := []string{
-			fmt.Sprintf("# Using older hash from %s", update.OriginalVersion),
-			fmt.Sprintf("# Original version: %s", update.OriginalVersion),
+		// Use the update's comments if available, otherwise generate them
+		var comments []string
+		if len(update.Comments) > 0 {
+			comments = update.Comments
+		} else {
+			comments = []string{
+				fmt.Sprintf("# Using older hash from %s", update.OriginalVersion),
+				fmt.Sprintf("# Original version: %s", update.OriginalVersion),
+			}
 		}
 
-		// Reconstruct the line with comments and version
-		newLine := fmt.Sprintf("%s  # %s", strings.TrimSpace(mainPart), update.NewVersion)
+		// Reconstruct the line with comments and version comment
+		var newLine string
+		if update.VersionComment != "" {
+			newLine = fmt.Sprintf("%s  %s", strings.TrimSpace(mainPart), update.VersionComment)
+		} else {
+			newLine = fmt.Sprintf("%s  # %s", strings.TrimSpace(mainPart), update.NewVersion)
+		}
 
 		// Insert version history comments before the line
 		newLines := make([]string, 0, len(lines)+2)
