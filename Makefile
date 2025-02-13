@@ -5,7 +5,12 @@ GOTEST=$(GOCMD) test
 BINARY_NAME=ghactions-updater
 DOCKER_IMAGE=ghactions-updater
 
-.PHONY: all build test test-e2e lint clean dockerbuild vuln-check
+.PHONY: all build test test-e2e lint clean docker_build vuln-check install-lint install-vuln-tools
+
+# Install linting tools if not present
+.PHONY: install-lint
+install-lint:
+	@which golangci-lint > /dev/null || go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
 # Install vulnerability checking tools if not present
 .PHONY: install-vuln-tools
@@ -34,12 +39,12 @@ test-e2e:
 	fi
 	$(GOTEST) -v -tags=e2e ./test/e2e/...
 
-lint:
+lint: install-lint
 	golangci-lint run
 
 clean:
 	rm -f bin/$(BINARY_NAME)
 	rm -rf vendor/
 
-dockerbuild:
+docker_build:
 	docker build -t $(DOCKER_IMAGE):latest .
