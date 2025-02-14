@@ -90,6 +90,10 @@ jobs:
 
 				// Create multiple workflow files with different actions
 				workflowDir := filepath.Join(repoPath, ".github", "workflows")
+				if err := os.MkdirAll(workflowDir, 0755); err != nil {
+					t.Fatalf("Failed to create workflows directory: %v", err)
+				}
+
 				actions := []struct {
 					name    string
 					version string
@@ -102,19 +106,107 @@ jobs:
 					{"actions/cache", "v2", "5678901"},
 				}
 
+				// Create workflow files in separate branches
 				for i, action := range actions {
-					workflowContent := fmt.Sprintf(`
-name: Workflow-%d
+					// Create a new branch from main for this workflow
+					branchName := fmt.Sprintf("workflow-%d", i)
+					setupCmds := []struct {
+						args []string
+						msg  string
+					}{
+						{[]string{"checkout", "main"}, "switch to main"},
+						{[]string{"checkout", "-b", branchName}, "create branch"},
+						{[]string{"rm", "-rf", ".github/workflows"}, "clean workflows dir"},
+					}
+
+					for _, c := range setupCmds {
+						cmd := env.createCommand("git", c.args...)
+						cmd.Dir = repoPath
+						if output, err := cmd.CombinedOutput(); err != nil {
+							t.Fatalf("Failed to %s: %v\nOutput: %s", c.msg, err, string(output))
+						}
+					}
+
+					// Create workflow content
+					workflowContent := fmt.Sprintf(`name: Workflow-%d
 on: [push]
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: %s@%s  # Original version: %s
-`, i, action.name, action.hash, action.version)
+      - name: Test
+        run: echo "test"`, i, action.name, action.hash, action.version)
+
+					// Ensure workflow directory exists
+					if err := os.MkdirAll(workflowDir, 0755); err != nil {
+						t.Fatalf("Failed to create workflow directory: %v", err)
+					}
+
+					// Write workflow file with Unix line endings and sync to disk
 					workflowFile := filepath.Join(workflowDir, fmt.Sprintf("test-%d.yml", i))
-					if err := os.WriteFile(workflowFile, []byte(workflowContent), 0644); err != nil {
-						t.Fatalf("Failed to create workflow file: %v", err)
+					content := []byte(strings.ReplaceAll(workflowContent, "\r\n", "\n"))
+					if err := os.WriteFile(workflowFile, content, 0644); err != nil {
+						t.Fatalf("Failed to write workflow file: %v", err)
+					}
+
+					// Verify file was written correctly
+					if _, err := os.Stat(workflowFile); err != nil {
+						t.Fatalf("Failed to verify workflow file: %v", err)
+					}
+
+
+					// Configure git for this commit
+					gitConfigs := []struct {
+						name  string
+						value string
+					}{
+						{"user.name", "GitHub Actions Bot"},
+						{"user.email", "actions-bot@github.com"},
+					}
+
+					for _, config := range gitConfigs {
+						cmd := env.createCommand("git", "config", config.name, config.value)
+						cmd.Dir = repoPath
+						if err := cmd.Run(); err != nil {
+							t.Fatalf("Failed to configure git %s: %v", config.name, err)
+						}
+					}
+
+					// Stage and commit each workflow file with debug output
+					cmds := []struct {
+						args []string
+						msg  string
+					}{
+						{[]string{"add", "."}, "stage workflow file"},
+						{[]string{"commit", "-m", fmt.Sprintf("Add workflow %d", i)}, "commit workflow file"},
+					}
+
+					for _, c := range cmds {
+						cmd := env.createCommand("git", c.args...)
+						cmd.Dir = repoPath
+						output, err := cmd.CombinedOutput()
+						t.Logf("Command output (%s):\n%s", c.msg, string(output))
+						if err != nil {
+							t.Fatalf("Failed to %s: %v\nOutput: %s", c.msg, err, string(output))
+						}
+					}
+
+					// Push branch and switch back to main
+					finalCmds := []struct {
+						args []string
+						msg  string
+					}{
+						{[]string{"push", "-f", "-u", "origin", branchName}, "push branch"},
+						{[]string{"checkout", "main"}, "switch back to main"},
+					}
+
+					for _, c := range finalCmds {
+						cmd := env.createCommand("git", c.args...)
+						cmd.Dir = repoPath
+						if output, err := cmd.CombinedOutput(); err != nil {
+							t.Fatalf("Failed to %s: %v\nOutput: %s", c.msg, err, string(output))
+						}
 					}
 				}
 
@@ -123,6 +215,7 @@ jobs:
 				results := make(chan error, len(actions))
 				manager := updater.NewUpdateManager()
 				checker := updater.NewDefaultVersionChecker(os.Getenv("GITHUB_TOKEN"))
+				var gitMutex sync.Mutex // Mutex for git operations
 
 				for i, action := range actions {
 					wg.Add(1)
@@ -155,8 +248,46 @@ jobs:
 							return
 						}
 
-						// Create update
+						// Lock git operations
+						gitMutex.Lock()
+						defer gitMutex.Unlock()
+
+						// Switch to the correct branch
+						branchName := fmt.Sprintf("workflow-%d", i)
+						cmd := env.createCommand("git", "checkout", branchName)
+						cmd.Dir = repoPath
+						if output, err := cmd.CombinedOutput(); err != nil {
+							results <- fmt.Errorf("failed to switch to branch %s: %v\nOutput: %s", branchName, err, string(output))
+							return
+						}
+
+						// Parse workflow file to get line number
 						workflowFile := filepath.Join(workflowDir, fmt.Sprintf("test-%d.yml", i))
+						scanner := updater.NewScanner()
+						refs, err := scanner.ParseActionReferences(workflowFile)
+						if err != nil {
+							results <- fmt.Errorf("failed to parse workflow file: %v", err)
+							return
+						}
+
+						// Find the action reference with matching owner/name
+						var foundRef *updater.ActionReference
+						for _, ref := range refs {
+							if ref.Owner == actionRef.Owner && ref.Name == actionRef.Name {
+								foundRef = &ref
+								break
+							}
+						}
+
+						if foundRef == nil {
+							results <- fmt.Errorf("failed to find action reference in workflow file")
+							return
+						}
+
+						// Copy line number to our action reference
+						actionRef.Line = foundRef.Line
+
+						// Create update
 						update, err := manager.CreateUpdate(env.ctx, workflowFile, actionRef, latestVersion, latestHash)
 						if err != nil {
 							results <- fmt.Errorf("failed to create update: %v", err)
@@ -168,6 +299,25 @@ jobs:
 							if err := manager.ApplyUpdates(env.ctx, []*updater.Update{update}); err != nil {
 								results <- fmt.Errorf("failed to apply update: %v", err)
 								return
+							}
+
+							// Stage and commit the update
+							cmds := []struct {
+								args []string
+								msg  string
+							}{
+								{[]string{"add", "."}, "stage updated workflow"},
+								{[]string{"commit", "-m", fmt.Sprintf("Update workflow %d", i)}, "commit update"},
+								{[]string{"push", "-f", "origin", branchName}, "push update"},
+							}
+
+							for _, c := range cmds {
+								cmd := env.createCommand("git", c.args...)
+								cmd.Dir = repoPath
+								if output, err := cmd.CombinedOutput(); err != nil {
+									results <- fmt.Errorf("failed to %s: %v\nOutput: %s", c.msg, err, string(output))
+									return
+								}
 							}
 						}
 

@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 )
 
 // DefaultUpdateManager implements the UpdateManager interface
-type DefaultUpdateManager struct{}
+type DefaultUpdateManager struct {
+	fileLocks sync.Map // Map of file paths to sync.Mutex
+}
 
 // NewUpdateManager creates a new instance of DefaultUpdateManager
 func NewUpdateManager() *DefaultUpdateManager {
@@ -59,9 +62,18 @@ func (m *DefaultUpdateManager) ApplyUpdates(ctx context.Context, updates []*Upda
 		fileUpdates[update.FilePath] = append(fileUpdates[update.FilePath], update)
 	}
 
-	// Process each file
+	// Process each file with proper locking
 	for file, updates := range fileUpdates {
-		if err := m.applyFileUpdates(file, updates); err != nil {
+		// Get or create mutex for this file
+		lockInterface, _ := m.fileLocks.LoadOrStore(file, &sync.Mutex{})
+		lock := lockInterface.(*sync.Mutex)
+
+		// Lock the file for exclusive access
+		lock.Lock()
+		err := m.applyFileUpdates(file, updates)
+		lock.Unlock()
+
+		if err != nil {
 			return fmt.Errorf("error updating file %s: %w", file, err)
 		}
 	}
@@ -70,6 +82,7 @@ func (m *DefaultUpdateManager) ApplyUpdates(ctx context.Context, updates []*Upda
 }
 
 // applyFileUpdates applies updates to a single file
+// Note: Caller must hold the file lock
 func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) error {
 	// Read file content
 	content, err := os.ReadFile(file)
@@ -83,14 +96,28 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 	// Sort updates by line number in descending order to avoid line number changes
 	sortUpdatesByLine(updates)
 
-	// Apply each update
-	for _, update := range updates {
-		if update.LineNumber <= 0 || update.LineNumber > len(lines) {
-			return fmt.Errorf("invalid line number %d for file %s", update.LineNumber, file)
-		}
+		// Track line number adjustments
+		lineAdjustments := make(map[int]int)
+		
+		// Apply each update
+		for _, update := range updates {
+			// Adjust the line number based on previous updates
+			adjustedLineNumber := update.LineNumber
+			for origLine, adjustment := range lineAdjustments {
+				if update.LineNumber > origLine {
+					adjustedLineNumber += adjustment
+				}
+			}
+
+			if adjustedLineNumber <= 0 || adjustedLineNumber > len(lines) {
+				return fmt.Errorf("invalid line number %d (adjusted from %d) for file %s", adjustedLineNumber, update.LineNumber, file)
+			}
+
+			// Update the line number for this update
+			update.LineNumber = adjustedLineNumber
 
 		// Get the line and extract any comments
-		line := lines[update.LineNumber-1]
+		line := lines[adjustedLineNumber-1]
 		parts := strings.SplitN(line, "#", 2)
 		mainPart := strings.TrimSpace(parts[0])
 
@@ -123,13 +150,16 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 
 		// Insert version history comments before the line
 		newLines := make([]string, 0, len(lines)+2)
-		newLines = append(newLines, lines[:update.LineNumber-1]...)
+		newLines = append(newLines, lines[:adjustedLineNumber-1]...)
 		newLines = append(newLines, comments...)
 		newLines = append(newLines, newLine)
-		if update.LineNumber < len(lines) {
-			newLines = append(newLines, lines[update.LineNumber:]...)
+		if adjustedLineNumber < len(lines) {
+			newLines = append(newLines, lines[adjustedLineNumber:]...)
 		}
 		lines = newLines
+
+		// Record the line number adjustment for subsequent updates
+		lineAdjustments[update.LineNumber] = len(comments)
 	}
 
 	// Join lines back together
