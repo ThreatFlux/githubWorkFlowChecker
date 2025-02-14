@@ -47,12 +47,93 @@ func (m *mockPRCreator) CreatePR(ctx context.Context, updates []*updater.Update)
 
 func TestRun(t *testing.T) {
 	tests := []struct {
-		name            string
-		workflowContent string
-		versionChecker  *mockVersionChecker
-		prCreator       *mockPRCreator
-		wantErr         bool
+		name                string
+		workflowContent     string
+		additionalWorkflows map[string]string
+		versionChecker      *mockVersionChecker
+		prCreator           *mockPRCreator
+		wantErr             bool
 	}{
+		{
+			name: "version check failure - GetLatestVersion error",
+			workflowContent: `name: Test Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2`,
+			versionChecker: &mockVersionChecker{
+				latestVersion: "",
+				latestHash:    "",
+				err:           fmt.Errorf("failed to get latest version: rate limit exceeded"),
+			},
+			prCreator: &mockPRCreator{
+				err: nil,
+			},
+			wantErr: false, // Should not error as it just logs and continues
+		},
+		{
+			name: "version check failure - IsUpdateAvailable error",
+			workflowContent: `name: Test Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2`,
+			versionChecker: &mockVersionChecker{
+				latestVersion: "v3",
+				latestHash:    "abc123",
+				err:           fmt.Errorf("failed to check update: network timeout"),
+			},
+			prCreator: &mockPRCreator{
+				err: nil,
+			},
+			wantErr: false, // Should log error and continue with next action
+		},
+		{
+			name: "version check failure - GetCommitHash error",
+			workflowContent: `name: Test Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2`,
+			versionChecker: &mockVersionChecker{
+				latestVersion: "v3",
+				latestHash:    "",
+				err:           fmt.Errorf("failed to get commit hash: invalid version"),
+			},
+			prCreator: &mockPRCreator{
+				err: nil,
+			},
+			wantErr: false, // Should log error and continue
+		},
+		{
+			name: "multiple actions with mixed version check results",
+			workflowContent: `name: Test Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+      - uses: actions/setup-python@v2`,
+			versionChecker: &mockVersionChecker{
+				latestVersion: "v3",
+				latestHash:    "abc123",
+				err:           nil,
+			},
+			prCreator: &mockPRCreator{
+				err: nil,
+			},
+			wantErr: false,
+		},
 		{
 			name: "successful update",
 			workflowContent: `name: Test Workflow
@@ -123,6 +204,98 @@ jobs:
 			},
 			wantErr: false,
 		},
+		{
+			name: "multiple workflow files with mixed updates",
+			workflowContent: `name: Test Workflow 1
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2`,
+			additionalWorkflows: map[string]string{
+				"test2.yml": `name: Test Workflow 2
+on: [pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v2`,
+				"test3.yml": `name: Test Workflow 3
+on: [workflow_dispatch]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v2`,
+			},
+			versionChecker: &mockVersionChecker{
+				latestVersion: "v3",
+				latestHash:    "abc123def456",
+				err:           nil,
+			},
+			prCreator: &mockPRCreator{
+				err: nil,
+			},
+			wantErr: false,
+		},
+		{
+			name: "multiple workflow files with errors",
+			workflowContent: `name: Test Workflow 1
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2`,
+			additionalWorkflows: map[string]string{
+				"invalid.yml": `invalid yaml content`,
+				"test2.yml": `name: Test Workflow 2
+on: [pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v2`,
+			},
+			versionChecker: &mockVersionChecker{
+				latestVersion: "v3",
+				latestHash:    "abc123def456",
+				err:           nil,
+			},
+			prCreator: &mockPRCreator{
+				err: nil,
+			},
+			wantErr: false, // Should continue processing valid files
+		},
+		{
+			name: "multiple workflow files with version check errors",
+			workflowContent: `name: Test Workflow 1
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2`,
+			additionalWorkflows: map[string]string{
+				"test2.yml": `name: Test Workflow 2
+on: [pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v2`,
+			},
+			versionChecker: &mockVersionChecker{
+				latestVersion: "",
+				latestHash:    "",
+				err:           fmt.Errorf("API rate limit exceeded"),
+			},
+			prCreator: &mockPRCreator{
+				err: nil,
+			},
+			wantErr: false, // Should log errors and continue
+		},
 	}
 
 	for _, tt := range tests {
@@ -140,10 +313,19 @@ jobs:
 				t.Fatalf("Failed to create workflows dir: %v", err)
 			}
 
-			// Create a test workflow file if content is provided
+			// Create test workflow files
 			if tt.workflowContent != "" {
 				if err := os.WriteFile(filepath.Join(workflowsDir, "test.yml"), []byte(tt.workflowContent), 0644); err != nil {
 					t.Fatalf("Failed to create test workflow file: %v", err)
+				}
+			}
+
+			// Create additional workflow files if provided
+			if tt.additionalWorkflows != nil {
+				for filename, content := range tt.additionalWorkflows {
+					if err := os.WriteFile(filepath.Join(workflowsDir, filename), []byte(content), 0644); err != nil {
+						t.Fatalf("Failed to create additional workflow file %s: %v", filename, err)
+					}
 				}
 			}
 
@@ -216,6 +398,83 @@ jobs:
 				}
 			}
 		})
+	}
+}
+
+func TestRunWithAbsError(t *testing.T) {
+	// Save original Abs function and restore after test
+	defer restoreAbs()
+
+	// Create a temporary directory for test files
+	tempDir, err := os.MkdirTemp("", "workflow-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create .github/workflows directory
+	workflowsDir := filepath.Join(tempDir, ".github", "workflows")
+	if err := os.MkdirAll(workflowsDir, 0755); err != nil {
+		t.Fatalf("Failed to create workflows dir: %v", err)
+	}
+
+	// Create a test workflow file
+	workflowContent := []byte(`name: Test Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2`)
+
+	if err := os.WriteFile(filepath.Join(workflowsDir, "test.yml"), workflowContent, 0644); err != nil {
+		t.Fatalf("Failed to create test workflow file: %v", err)
+	}
+
+	// Set repoPath to the temporary directory
+	*repoPath = tempDir
+
+	// Reset flags
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	repoPath = flag.String("repo", ".", "Path to the repository")
+	owner = flag.String("owner", "test-owner", "Repository owner")
+	repo = flag.String("repo-name", "test-repo", "Repository name")
+	token = flag.String("token", "test-token", "GitHub token")
+
+	if err := flag.CommandLine.Parse([]string{}); err != nil {
+		t.Fatalf("Failed to parse command line flags: %v", err)
+	}
+
+	// Mock version checker and PR creator
+	oldVersionFactory := versionCheckerFactory
+	oldPRFactory := prCreatorFactory
+	defer func() {
+		versionCheckerFactory = oldVersionFactory
+		prCreatorFactory = oldPRFactory
+	}()
+
+	versionCheckerFactory = func(token string) updater.VersionChecker {
+		return &mockVersionChecker{
+			latestVersion: "v3",
+			latestHash:    "abc123def456",
+			err:           nil,
+		}
+	}
+
+	prCreatorFactory = func(token, owner, repo string) updater.PRCreator {
+		return &mockPRCreator{
+			err: nil,
+		}
+	}
+
+	// Test filepath.Abs error
+	mockAbsWithError()
+	err = run()
+	if err == nil {
+		t.Error("run() with Abs error: expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "mock Abs error") {
+		t.Errorf("run() with Abs error: expected 'mock Abs error', got %v", err)
 	}
 }
 

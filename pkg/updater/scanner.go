@@ -1,16 +1,25 @@
 package updater
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Scanner handles scanning and parsing of workflow files
-type Scanner struct{}
+type Scanner struct {
+	rateLimit    int
+	rateDuration time.Duration
+	lastOp       time.Time
+	opCount      int
+	mu           sync.Mutex
+}
 
 // parseActionReference parses an action reference string (e.g., "actions/checkout@v2" or "actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675")
 func parseActionReference(ref string, path string, comments []string) (*ActionReference, error) {
@@ -25,6 +34,10 @@ func parseActionReference(ref string, path string, comments []string) (*ActionRe
 	}
 
 	version := parts[1]
+	if version == "" {
+		return nil, fmt.Errorf("invalid action reference format: %s", ref)
+	}
+
 	var commitHash string
 
 	// If the reference is a commit hash (40 character hex string)
@@ -54,7 +67,58 @@ func parseActionReference(ref string, path string, comments []string) (*ActionRe
 
 // NewScanner creates a new Scanner instance
 func NewScanner() *Scanner {
-	return &Scanner{}
+	return &Scanner{
+		rateLimit:    60,          // Default to 60 operations
+		rateDuration: time.Minute, // Per minute
+	}
+}
+
+// SetRateLimit configures the rate limiting for the scanner
+func (s *Scanner) SetRateLimit(limit int, duration time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rateLimit = limit
+	s.rateDuration = duration
+}
+
+// checkRateLimit ensures operations don't exceed the configured rate limit
+func (s *Scanner) checkRateLimit(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check context cancellation first
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	now := time.Now()
+	windowStart := now.Add(-s.rateDuration)
+
+	// If this is our first operation or we're in a new time window
+	if s.lastOp.IsZero() || s.lastOp.Before(windowStart) {
+		s.opCount = 1
+		s.lastOp = now
+		return nil
+	}
+
+	// If we've exceeded the rate limit
+	if s.opCount >= s.rateLimit {
+		return context.DeadlineExceeded
+	}
+
+	// We're within the rate limit
+	s.opCount++
+	return nil
+}
+
+// checkTimeout verifies if an operation has exceeded its timeout
+func (s *Scanner) checkTimeout(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		return nil
+	}
 }
 
 // ScanWorkflows finds all GitHub Actions workflow files in the repository
@@ -77,6 +141,10 @@ func (s *Scanner) ScanWorkflows(dir string) ([]string, error) {
 
 		// Check for YAML files
 		if strings.HasSuffix(info.Name(), ".yml") || strings.HasSuffix(info.Name(), ".yaml") {
+			// Check if file is readable
+			if _, err := os.ReadFile(path); err != nil {
+				return err
+			}
 			workflows = append(workflows, path)
 		}
 
@@ -128,7 +196,8 @@ func (s *Scanner) ParseActionReferences(path string) ([]ActionReference, error) 
 	}
 
 	actions := make([]ActionReference, 0)
-	err = s.parseNode(doc.Content[0], path, &actions, lineComments)
+	seen := make(map[string]bool) // Track unique action references by line
+	err = s.parseNode(doc.Content[0], path, &actions, lineComments, seen)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing workflow content: %w", err)
 	}
@@ -137,7 +206,7 @@ func (s *Scanner) ParseActionReferences(path string) ([]ActionReference, error) 
 }
 
 // parseNode recursively traverses the YAML structure looking for action references
-func (s *Scanner) parseNode(node *yaml.Node, path string, actions *[]ActionReference, lineComments map[int][]string) error {
+func (s *Scanner) parseNode(node *yaml.Node, path string, actions *[]ActionReference, lineComments map[int][]string, seen map[string]bool) error {
 	if node == nil {
 		return nil
 	}
@@ -148,7 +217,36 @@ func (s *Scanner) parseNode(node *yaml.Node, path string, actions *[]ActionRefer
 			key := node.Content[i]
 			value := node.Content[i+1]
 
-			if key.Value == "uses" {
+			if key.Value == "uses" && value.Kind == yaml.ScalarNode {
+				// Skip if it's inside a run command
+				if i >= 2 && node.Content[i-2].Value == "run" {
+					continue
+				}
+
+				// Handle template expressions
+				if strings.Contains(value.Value, "${{") && strings.Contains(value.Value, "}}") {
+					// For matrix expressions, we want to count them as one reference
+					if strings.Contains(value.Value, "matrix.action") {
+						lineNumber := value.Line
+						comments := lineComments[lineNumber]
+						if lineNumber > 0 && lineComments[lineNumber-1] != nil {
+							comments = append(lineComments[lineNumber-1], comments...)
+						}
+
+						// Create a placeholder action reference for matrix usage
+						action := &ActionReference{
+							Owner:    "matrix",
+							Name:     "action",
+							Version:  "dynamic",
+							Path:     path,
+							Line:     lineNumber,
+							Comments: comments,
+						}
+						*actions = append(*actions, *action)
+					}
+					continue
+				}
+
 				lineNumber := value.Line
 				comments := lineComments[lineNumber]
 				if lineNumber > 0 && lineComments[lineNumber-1] != nil {
@@ -161,22 +259,94 @@ func (s *Scanner) parseNode(node *yaml.Node, path string, actions *[]ActionRefer
 				}
 				action.Line = lineNumber
 				action.Comments = comments
-				*actions = append(*actions, *action)
-			} else {
-				if err := s.parseNode(value, path, actions, lineComments); err != nil {
+
+				// Include line number in the key to handle same action used in different places
+				key := fmt.Sprintf("%s@%s:%d", action.Owner+"/"+action.Name, action.Version, lineNumber)
+				if !seen[key] {
+					seen[key] = true
+					*actions = append(*actions, *action)
+				}
+			} else if key.Value == "steps" {
+				// Special handling for steps with aliases
+				if value.Kind == yaml.AliasNode {
+					// Get the actual node that this alias refers to
+					aliasedNode := value.Alias
+					if aliasedNode != nil {
+						// Create a copy of the aliased node with the current line number
+						aliasLine := value.Line
+						err := s.parseAliasedNode(aliasedNode, aliasLine, path, actions, lineComments, seen)
+						if err != nil {
+							return err
+						}
+					}
+				} else {
+					if err := s.parseNode(value, path, actions, lineComments, seen); err != nil {
+						return err
+					}
+				}
+			} else if key.Value != "run" { // Skip parsing inside run commands
+				if err := s.parseNode(value, path, actions, lineComments, seen); err != nil {
 					return err
 				}
 			}
 		}
 	case yaml.SequenceNode:
 		for _, item := range node.Content {
-			if err := s.parseNode(item, path, actions, lineComments); err != nil {
+			if err := s.parseNode(item, path, actions, lineComments, seen); err != nil {
 				return err
 			}
 		}
 	case yaml.DocumentNode:
 		for _, item := range node.Content {
-			if err := s.parseNode(item, path, actions, lineComments); err != nil {
+			if err := s.parseNode(item, path, actions, lineComments, seen); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// parseAliasedNode parses a node that is referenced by an alias, using the alias's line number
+func (s *Scanner) parseAliasedNode(node *yaml.Node, aliasLine int, path string, actions *[]ActionReference, lineComments map[int][]string, seen map[string]bool) error {
+	if node == nil {
+		return nil
+	}
+
+	switch node.Kind {
+	case yaml.MappingNode:
+		for i := 0; i < len(node.Content); i += 2 {
+			key := node.Content[i]
+			value := node.Content[i+1]
+
+			if key.Value == "uses" && value.Kind == yaml.ScalarNode {
+				// Use the alias line number instead of the original node's line number
+				comments := lineComments[aliasLine]
+				if aliasLine > 0 && lineComments[aliasLine-1] != nil {
+					comments = append(lineComments[aliasLine-1], comments...)
+				}
+
+				action, err := parseActionReference(value.Value, path, comments)
+				if err != nil {
+					return err
+				}
+				action.Line = aliasLine
+				action.Comments = comments
+
+				// Include line number in the key to handle same action used in different places
+				key := fmt.Sprintf("%s@%s:%d", action.Owner+"/"+action.Name, action.Version, aliasLine)
+				if !seen[key] {
+					seen[key] = true
+					*actions = append(*actions, *action)
+				}
+			} else if key.Value != "run" { // Skip parsing inside run commands
+				if err := s.parseNode(value, path, actions, lineComments, seen); err != nil {
+					return err
+				}
+			}
+		}
+	case yaml.SequenceNode:
+		for _, item := range node.Content {
+			if err := s.parseAliasedNode(item, aliasLine, path, actions, lineComments, seen); err != nil {
 				return err
 			}
 		}

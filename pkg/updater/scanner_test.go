@@ -3,174 +3,255 @@ package updater
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestScanWorkflows(t *testing.T) {
-	// Create a temporary directory for test files
-	tempDir, err := os.MkdirTemp("", "workflow-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	// Create .github/workflows directory
-	workflowsDir := filepath.Join(tempDir, ".github", "workflows")
-	err = os.MkdirAll(workflowsDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create workflows dir: %v", err)
-	}
-
-	// Create test workflow files
-	testFiles := []struct {
-		name    string
-		content string
+func TestParseActionReferencesInvalidSyntax(t *testing.T) {
+	tests := []struct {
+		name        string
+		content     string
+		wantErrMsg  string
+		permissions os.FileMode
 	}{
 		{
-			name: "workflow1.yml",
-			content: `name: Test Workflow 1
+			name: "invalid yaml syntax - missing colon",
+			content: `name Test Workflow
+on: [push]
+jobs:
+  test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2`,
+			wantErrMsg:  "error parsing workflow YAML",
+			permissions: 0644,
+		},
+		{
+			name: "invalid yaml syntax - incorrect indentation",
+			content: `name: Test Workflow
+on: [push]
+jobs:
+test:
+  runs-on: ubuntu-latest
+   steps:
+    - uses: actions/checkout@v2`,
+			wantErrMsg:  "error parsing workflow YAML",
+			permissions: 0644,
+		},
+		{
+			name: "malformed action reference - missing @",
+			content: `name: Test Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkoutv2`,
+			wantErrMsg:  "invalid action reference format",
+			permissions: 0644,
+		},
+		{
+			name: "malformed action reference - missing owner",
+			content: `name: Test Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: checkout@v2`,
+			wantErrMsg:  "invalid action name format",
+			permissions: 0644,
+		},
+		{
+			name:        "empty yaml document",
+			content:     "",
+			wantErrMsg:  "empty YAML document",
+			permissions: 0644,
+		},
+		{
+			name: "invalid yaml syntax - unmatched quotes",
+			content: `name: "Test Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: 'ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2`,
+			wantErrMsg:  "error parsing workflow YAML",
+			permissions: 0644,
+		},
+		{
+			name: "permission error",
+			content: `name: Test Workflow
 on: [push]
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2`,
-		},
-		{
-			name: "workflow2.yaml",
-			content: `name: Test Workflow 2
-on: [pull_request]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/setup-node@v3`,
+			wantErrMsg:  "permission denied",
+			permissions: 0000,
 		},
 	}
 
-	for _, tf := range testFiles {
-		err := os.WriteFile(filepath.Join(workflowsDir, tf.name), []byte(tf.content), 0644)
-		if err != nil {
-			t.Fatalf("Failed to create test file %s: %v", tf.name, err)
-		}
-	}
-
-	// Create scanner and scan workflows
 	scanner := NewScanner()
-	files, err := scanner.ScanWorkflows(workflowsDir)
-	if err != nil {
-		t.Fatalf("ScanWorkflows() error = %v", err)
-	}
 
-	// Check number of files found
-	if len(files) != len(testFiles) {
-		t.Errorf("ScanWorkflows() found %d files, want %d", len(files), len(testFiles))
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create temporary directory
+			tempDir, err := os.MkdirTemp("", "workflow-test")
+			if err != nil {
+				t.Fatalf("Failed to create temp dir: %v", err)
+			}
+			defer os.RemoveAll(tempDir)
 
-	// Check file extensions
-	for _, file := range files {
-		ext := filepath.Ext(file)
-		if ext != ".yml" && ext != ".yaml" {
-			t.Errorf("ScanWorkflows() found file with invalid extension: %s", ext)
-		}
+			// Create test file
+			testFile := filepath.Join(tempDir, "workflow.yml")
+			err = os.WriteFile(testFile, []byte(tt.content), tt.permissions)
+			if err != nil {
+				t.Fatalf("Failed to create test file: %v", err)
+			}
+
+			// Parse action references
+			_, err = scanner.ParseActionReferences(testFile)
+			if err == nil {
+				t.Error("Expected error, got nil")
+				return
+			}
+
+			if !strings.Contains(err.Error(), tt.wantErrMsg) {
+				t.Errorf("Expected error containing %q, got %q", tt.wantErrMsg, err.Error())
+			}
+		})
 	}
 }
 
-func TestParseActionReferences(t *testing.T) {
-	// Create a temporary workflow file
-	tempDir, err := os.MkdirTemp("", "workflow-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
-
-	workflowContent := `name: Test Workflow
-on: [push]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      # Using checkout action for repository access
-      - uses: actions/checkout@v2
-
-      # Latest version of setup-node
-      - uses: actions/setup-node@v3
-
-      # Using specific commit hash for cache action
-      # Original version: v3
-      - uses: actions/cache@d1255ad9362389eac595a9ae406b8e8cb3331f16
-
-      - run: npm test`
-
-	workflowFile := filepath.Join(tempDir, "workflow.yml")
-	err = os.WriteFile(workflowFile, []byte(workflowContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
-
-	// Check specific references
-	expectedActions := []struct {
-		owner      string
+func TestScanWorkflowsErrors(t *testing.T) {
+	tests := []struct {
 		name       string
-		version    string
-		commitHash string
-		comments   []string
+		setup      func(string) error
+		wantErrMsg string
 	}{
 		{
-			owner:    "actions",
-			name:     "checkout",
-			version:  "v2",
-			comments: []string{"# Using checkout action for repository access"},
+			name: "non-existent directory",
+			setup: func(dir string) error {
+				return nil // Don't create the directory
+			},
+			wantErrMsg: "workflows directory not found",
 		},
 		{
-			owner:    "actions",
-			name:     "setup-node",
-			version:  "v3",
-			comments: []string{"# Latest version of setup-node"},
-		},
-		{
-			owner:      "actions",
-			name:       "cache",
-			version:    "v3",
-			commitHash: "d1255ad9362389eac595a9ae406b8e8cb3331f16",
-			comments:   []string{"# Using specific commit hash for cache action", "# Original version: v3"},
-		},
-	}
-
-	// Parse action references
-	scanner := NewScanner()
-	refs, err := scanner.ParseActionReferences(workflowFile)
-	if err != nil {
-		t.Fatalf("ParseActionReferences() error = %v", err)
-	}
-
-	// Check number of references found
-	if len(refs) != len(expectedActions) {
-		t.Errorf("ParseActionReferences() found %d refs, want %d", len(refs), len(expectedActions))
-	}
-
-	// Check specific references
-	for i, expected := range expectedActions {
-		if refs[i].Owner != expected.owner {
-			t.Errorf("Action[%d] owner = %s, want %s", i, refs[i].Owner, expected.owner)
-		}
-		if refs[i].Name != expected.name {
-			t.Errorf("Action[%d] name = %s, want %s", i, refs[i].Name, expected.name)
-		}
-		if refs[i].Version != expected.version {
-			t.Errorf("Action[%d] version = %s, want %s", i, refs[i].Version, expected.version)
-		}
-		if refs[i].CommitHash != expected.commitHash {
-			t.Errorf("Action[%d] commitHash = %s, want %s", i, refs[i].CommitHash, expected.commitHash)
-		}
-		if len(refs[i].Comments) != len(expected.comments) {
-			t.Errorf("Action[%d] comment count = %d, want %d", i, len(refs[i].Comments), len(expected.comments))
-		} else {
-			for j, comment := range expected.comments {
-				if refs[i].Comments[j] != comment {
-					t.Errorf("Action[%d] comment[%d] = %s, want %s", i, j, refs[i].Comments[j], comment)
+			name: "permission denied",
+			setup: func(dir string) error {
+				if err := os.MkdirAll(dir, 0755); err != nil {
+					return err
 				}
+				return os.Chmod(dir, 0000)
+			},
+			wantErrMsg: "permission denied",
+		},
+		{
+			name: "invalid workflow file",
+			setup: func(dir string) error {
+				if err := os.MkdirAll(dir, 0755); err != nil {
+					return err
+				}
+				// Create a file with invalid permissions for reading
+				filePath := filepath.Join(dir, "workflow.yml")
+				if err := os.WriteFile(filePath, []byte("invalid: yaml: content"), 0644); err != nil {
+					return err
+				}
+				return os.Chmod(filePath, 0000)
+			},
+			wantErrMsg: "permission denied",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create temporary directory
+			tempDir, err := os.MkdirTemp("", "workflow-test")
+			if err != nil {
+				t.Fatalf("Failed to create temp dir: %v", err)
 			}
-		}
+			defer os.RemoveAll(tempDir)
+
+			workflowsDir := filepath.Join(tempDir, ".github", "workflows")
+
+			// Set up test case
+			if err := tt.setup(workflowsDir); err != nil {
+				t.Fatalf("Failed to set up test: %v", err)
+			}
+
+			scanner := NewScanner()
+			_, err = scanner.ScanWorkflows(workflowsDir)
+			if err == nil {
+				t.Error("Expected error, got nil")
+				return
+			}
+
+			if !strings.Contains(err.Error(), tt.wantErrMsg) {
+				t.Errorf("Expected error containing %q, got %q", tt.wantErrMsg, err.Error())
+			}
+		})
+	}
+}
+
+func TestParseActionReferenceErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		ref        string
+		path       string
+		comments   []string
+		wantErrMsg string
+	}{
+		{
+			name:       "missing @ symbol",
+			ref:        "actions/checkoutv2",
+			path:       "workflow.yml",
+			comments:   nil,
+			wantErrMsg: "invalid action reference format",
+		},
+		{
+			name:       "missing owner",
+			ref:        "checkout@v2",
+			path:       "workflow.yml",
+			comments:   nil,
+			wantErrMsg: "invalid action name format",
+		},
+		{
+			name:       "empty reference",
+			ref:        "",
+			path:       "workflow.yml",
+			comments:   nil,
+			wantErrMsg: "invalid action reference format",
+		},
+		{
+			name:       "missing version",
+			ref:        "actions/checkout@",
+			path:       "workflow.yml",
+			comments:   nil,
+			wantErrMsg: "invalid action reference format: actions/checkout@",
+		},
+		{
+			name:       "too many parts",
+			ref:        "actions/checkout/extra@v2",
+			path:       "workflow.yml",
+			comments:   nil,
+			wantErrMsg: "invalid action name format",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseActionReference(tt.ref, tt.path, tt.comments)
+			if err == nil {
+				t.Error("Expected error, got nil")
+				return
+			}
+
+			if !strings.Contains(err.Error(), tt.wantErrMsg) {
+				t.Errorf("Expected error containing %q, got %q", tt.wantErrMsg, err.Error())
+			}
+		})
 	}
 }

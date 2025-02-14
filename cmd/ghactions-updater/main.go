@@ -46,7 +46,7 @@ var (
 
 func run() error {
 	// Convert repo path to absolute path
-	absPath, err := filepath.Abs(*repoPath)
+	absPath, err := absFunc(*repoPath)
 	if err != nil {
 		return fmt.Errorf("failed to get absolute path: %v", err)
 	}
