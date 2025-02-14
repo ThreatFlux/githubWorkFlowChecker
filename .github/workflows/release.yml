@@ -24,7 +24,7 @@ jobs:
         with:
           ref: ${{ github.ref }}
           check-name: 'End-to-End Tests'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          repo-token: ${{ secrets.GIT_TOKEN }}
           wait-interval: 10
           allowed-conclusions: success,skipped
 
