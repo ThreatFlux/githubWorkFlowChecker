@@ -8,11 +8,6 @@ import (
 // For testing
 var absFunc = filepath.Abs
 
-// Mock for filepath.Abs
-func mockAbs(path string) (string, error) {
-	return absFunc(path)
-}
-
 // Helper to restore original Abs function
 func restoreAbs() {
 	absFunc = filepath.Abs

@@ -111,13 +111,41 @@ jobs:
           draft: false
           prerelease: false
 
+      - name: Generate checksums
+        run: |
+          sha256sum ghactions-updater-linux-amd64 > ghactions-updater-linux-amd64.sha256
+          sha256sum ghactions-updater-darwin-amd64 > ghactions-updater-darwin-amd64.sha256
+          sha256sum ghactions-updater-windows-amd64.exe > ghactions-updater-windows-amd64.exe.sha256
+
+      - name: Verify Docker image
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          docker pull ghcr.io/threatflux/ghactions-updater:$VERSION
+          docker run --rm ghcr.io/threatflux/ghactions-updater:$VERSION version
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          # Extract changes between Unreleased and the new version
+          awk -v ver="[$VERSION]" '
+            BEGIN { p=0 }
+            /^## \[Unreleased\]/ { p=1; next }
+            /^## \[/ { if(p==1) exit }
+            p==1 { print }
+          ' CHANGELOG.md > release_notes.md
+
       - name: Upload Release Assets
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           files: |
             ghactions-updater-linux-amd64
+            ghactions-updater-linux-amd64.sha256
             ghactions-updater-darwin-amd64
+            ghactions-updater-darwin-amd64.sha256
             ghactions-updater-windows-amd64.exe
+            ghactions-updater-windows-amd64.exe.sha256
           tag_name: ${{ steps.version.outputs.version }}
+          body_path: release_notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
