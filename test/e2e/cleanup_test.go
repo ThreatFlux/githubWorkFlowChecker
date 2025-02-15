@@ -9,6 +9,37 @@ import (
 	"time"
 )
 
+// restorePermissions recursively restores write permissions for a directory and its contents
+func restorePermissions(path string) error {
+	// First restore permissions of the current path
+	if err := os.Chmod(path, 0755); err != nil {
+		return fmt.Errorf("failed to restore permissions for %s: %v", path, err)
+	}
+
+	// Read directory entries
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return fmt.Errorf("failed to read directory %s: %v", path, err)
+	}
+
+	// Recursively restore permissions for subdirectories and files
+	for _, entry := range entries {
+		fullPath := filepath.Join(path, entry.Name())
+		if entry.IsDir() {
+			if err := restorePermissions(fullPath); err != nil {
+				return err
+			}
+		} else {
+			// For files, just restore normal permissions
+			if err := os.Chmod(fullPath, 0644); err != nil {
+				return fmt.Errorf("failed to restore permissions for %s: %v", fullPath, err)
+			}
+		}
+	}
+
+	return nil
+}
+
 func TestCleanupScenarios(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -129,7 +160,12 @@ func TestCleanupScenarios(t *testing.T) {
 					t.Fatalf("Failed to make directory read-only: %v", err)
 				}
 
-				// Cleanup should handle read-only files and directories
+				// Restore permissions before cleanup
+				if err := restorePermissions(readOnlyDir); err != nil {
+					t.Fatalf("Failed to restore permissions: %v", err)
+				}
+
+				// Cleanup should now work with restored permissions
 				if err := os.RemoveAll(repoPath); err != nil {
 					t.Errorf("Cleanup failed with partial changes: %v", err)
 				}

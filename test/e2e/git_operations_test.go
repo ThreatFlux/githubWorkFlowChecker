@@ -3,6 +3,7 @@ package e2e
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -57,11 +58,37 @@ func TestGitOperations(t *testing.T) {
 					t.Fatalf("Failed to write file: %v", err)
 				}
 
-				// Try to push without committing
-				cmd = env.createCommand("git", "push", "origin", branchName)
+				// Stage and commit the changes
+				cmd = env.createCommand("git", "add", workflowFile)
 				cmd.Dir = repoPath
-				if err := cmd.Run(); err == nil {
-					t.Error("Expected error when pushing uncommitted changes, got nil")
+				if err := cmd.Run(); err != nil {
+					t.Fatalf("Failed to stage changes: %v", err)
+				}
+
+				cmd = env.createCommand("git", "commit", "-m", "test commit")
+				cmd.Dir = repoPath
+				if err := cmd.Run(); err != nil {
+					t.Fatalf("Failed to commit changes: %v", err)
+				}
+
+				// Add a non-existent remote
+				cmd = env.createCommand("git", "remote", "add", "invalid", "https://invalid-remote/repo.git")
+				cmd.Dir = repoPath
+				if err := cmd.Run(); err != nil {
+					t.Fatalf("Failed to add remote: %v", err)
+				}
+
+				// Try to push to non-existent remote
+				cmd = env.createCommand("git", "push", "invalid", branchName)
+				cmd.Dir = repoPath
+				if output, err := cmd.CombinedOutput(); err == nil {
+					t.Error("Expected error when pushing to non-existent remote, got nil")
+				} else {
+					// Verify error message
+					errStr := string(output)
+					if !strings.Contains(errStr, "Could not resolve host") && !strings.Contains(errStr, "failed to push") {
+						t.Errorf("Unexpected error message: %s", errStr)
+					}
 				}
 			},
 		},
@@ -91,11 +118,17 @@ func TestGitOperations(t *testing.T) {
 				// Clone repository
 				repoPath := env.cloneTestRepo()
 
-				// Try to create branch with invalid name
-				cmd := env.createCommand("git", "checkout", "-b", "invalid/branch/name")
+				// Try to create branch with invalid name containing spaces and special characters
+				cmd := env.createCommand("git", "checkout", "-b", "invalid branch/name*&^%")
 				cmd.Dir = repoPath
-				if err := cmd.Run(); err == nil {
+				if output, err := cmd.CombinedOutput(); err == nil {
 					t.Error("Expected error when creating branch with invalid name, got nil")
+				} else {
+					// Verify error message
+					errStr := string(output)
+					if !strings.Contains(errStr, "fatal: '") {
+						t.Errorf("Unexpected error message: %s", errStr)
+					}
 				}
 			},
 		},

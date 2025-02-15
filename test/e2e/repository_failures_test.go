@@ -93,10 +93,13 @@ func TestRepositoryFailures(t *testing.T) {
 				// Create repository
 				repoPath := env.cloneTestRepo()
 
-				// Make workflows directory read-only
+				// Make workflows directory read-only with no write permissions
 				workflowDir := filepath.Join(repoPath, ".github", "workflows")
-				if err := os.MkdirAll(workflowDir, 0444); err != nil {
-					t.Fatalf("Failed to create read-only workflows directory: %v", err)
+				if err := os.MkdirAll(workflowDir, 0755); err != nil {
+					t.Fatalf("Failed to create workflows directory: %v", err)
+				}
+				if err := os.Chmod(workflowDir, 0555); err != nil {
+					t.Fatalf("Failed to make directory read-only: %v", err)
 				}
 
 				// Attempt to create workflow file in read-only directory
@@ -104,6 +107,13 @@ func TestRepositoryFailures(t *testing.T) {
 				err := os.WriteFile(workflowFile, []byte("invalid: workflow: content"), 0644)
 				if err == nil {
 					t.Error("Expected error when writing to read-only directory, got nil")
+				} else if !os.IsPermission(err) {
+					t.Errorf("Expected permission denied error, got: %v", err)
+				}
+
+				// Restore permissions for cleanup
+				if err := os.Chmod(workflowDir, 0755); err != nil {
+					t.Fatalf("Failed to restore directory permissions: %v", err)
 				}
 			},
 		},
