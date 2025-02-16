@@ -63,8 +63,8 @@ func run() error {
 		return fmt.Errorf("failed to get absolute path: %v", err)
 	}
 
-	// Create scanner
-	scanner := updater.NewScanner()
+	// Create scanner with base directory set to repository root
+	scanner := updater.NewScanner(absPath)
 
 	// Scan for workflow files
 	workflowsDir := filepath.Join(absPath, ".github", "workflows")
@@ -81,8 +81,8 @@ func run() error {
 	// Create version checker using factory
 	checker := versionCheckerFactory(*token)
 
-	// Create update manager
-	manager := updater.NewUpdateManager()
+	// Create update manager with repository root as base directory
+	manager := updater.NewUpdateManager(absPath)
 
 	// Create PR creator using factory
 	creator := prCreatorFactory(*token, *owner, *repo)

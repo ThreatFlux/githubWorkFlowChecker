@@ -9,7 +9,14 @@ import (
 )
 
 func TestCreateUpdate(t *testing.T) {
-	manager := NewUpdateManager()
+	// Create a temporary directory for test files
+	tempDir, err := os.MkdirTemp("", "workflow-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	manager := NewUpdateManager(tempDir)
 	ctx := context.Background()
 
 	tests := []struct {
@@ -152,7 +159,7 @@ jobs:
 	}
 
 	// Apply updates
-	manager := NewUpdateManager()
+	manager := NewUpdateManager(tempDir)
 	if err := manager.ApplyUpdates(context.Background(), updates); err != nil {
 		t.Fatalf("ApplyUpdates() error = %v", err)
 	}
@@ -199,7 +206,14 @@ func TestSortUpdatesByLine(t *testing.T) {
 }
 
 func TestApplyFileUpdates_InvalidLineNumber(t *testing.T) {
-	manager := NewUpdateManager()
+	// Create a temporary directory for test files
+	tempDir, err := os.MkdirTemp("", "workflow-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	manager := NewUpdateManager(tempDir)
 	updates := []*Update{
 		{
 			Action: ActionReference{
@@ -214,14 +228,21 @@ func TestApplyFileUpdates_InvalidLineNumber(t *testing.T) {
 		},
 	}
 
-	err := manager.applyFileUpdates("test.yml", updates)
+	err = manager.applyFileUpdates("test.yml", updates)
 	if err == nil {
 		t.Error("applyFileUpdates() with invalid line number should return error")
 	}
 }
 
 func TestApplyFileUpdates_NonexistentFile(t *testing.T) {
-	manager := NewUpdateManager()
+	// Create a temporary directory for test files
+	tempDir, err := os.MkdirTemp("", "workflow-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	manager := NewUpdateManager(tempDir)
 	updates := []*Update{
 		{
 			Action: ActionReference{
@@ -236,7 +257,7 @@ func TestApplyFileUpdates_NonexistentFile(t *testing.T) {
 		},
 	}
 
-	err := manager.applyFileUpdates("nonexistent.yml", updates)
+	err = manager.applyFileUpdates("nonexistent.yml", updates)
 	if err == nil {
 		t.Error("applyFileUpdates() with nonexistent file should return error")
 	}

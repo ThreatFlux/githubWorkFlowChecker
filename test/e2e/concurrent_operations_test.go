@@ -40,7 +40,7 @@ jobs:
       - uses: actions/setup-go@v4
 `, i)
 					workflowFile := filepath.Join(workflowDir, fmt.Sprintf("test-%d.yml", i))
-					if err := os.WriteFile(workflowFile, []byte(workflowContent), 0644); err != nil {
+					if err := os.WriteFile(workflowFile, []byte(workflowContent), 0600); err != nil {
 						t.Fatalf("Failed to create workflow file: %v", err)
 					}
 				}
@@ -48,7 +48,7 @@ jobs:
 				// Scan workflows concurrently
 				var wg sync.WaitGroup
 				results := make(chan error, 5)
-				scanner := updater.NewScanner()
+				scanner := updater.NewScanner(repoPath)
 
 				for i := 0; i < 5; i++ {
 					wg.Add(1)
@@ -90,7 +90,7 @@ jobs:
 
 				// Create multiple workflow files with different actions
 				workflowDir := filepath.Join(repoPath, ".github", "workflows")
-				if err := os.MkdirAll(workflowDir, 0755); err != nil {
+				if err := os.MkdirAll(workflowDir, 0750); err != nil {
 					t.Fatalf("Failed to create workflows directory: %v", err)
 				}
 
@@ -139,14 +139,14 @@ jobs:
         run: echo "test"`, i, action.name, action.hash, action.version)
 
 					// Ensure workflow directory exists
-					if err := os.MkdirAll(workflowDir, 0755); err != nil {
+					if err := os.MkdirAll(workflowDir, 0750); err != nil {
 						t.Fatalf("Failed to create workflow directory: %v", err)
 					}
 
 					// Write workflow file with Unix line endings and sync to disk
 					workflowFile := filepath.Join(workflowDir, fmt.Sprintf("test-%d.yml", i))
 					content := []byte(strings.ReplaceAll(workflowContent, "\r\n", "\n"))
-					if err := os.WriteFile(workflowFile, content, 0644); err != nil {
+					if err := os.WriteFile(workflowFile, content, 0600); err != nil {
 						t.Fatalf("Failed to write workflow file: %v", err)
 					}
 
@@ -154,7 +154,6 @@ jobs:
 					if _, err := os.Stat(workflowFile); err != nil {
 						t.Fatalf("Failed to verify workflow file: %v", err)
 					}
-
 
 					// Configure git for this commit
 					gitConfigs := []struct {
@@ -213,7 +212,7 @@ jobs:
 				// Create updates concurrently
 				var wg sync.WaitGroup
 				results := make(chan error, len(actions))
-				manager := updater.NewUpdateManager()
+				manager := updater.NewUpdateManager(repoPath)
 				checker := updater.NewDefaultVersionChecker(os.Getenv("GITHUB_TOKEN"))
 				var gitMutex sync.Mutex // Mutex for git operations
 
@@ -263,7 +262,7 @@ jobs:
 
 						// Parse workflow file to get line number
 						workflowFile := filepath.Join(workflowDir, fmt.Sprintf("test-%d.yml", i))
-						scanner := updater.NewScanner()
+						scanner := updater.NewScanner(repoPath)
 						refs, err := scanner.ParseActionReferences(workflowFile)
 						if err != nil {
 							results <- fmt.Errorf("failed to parse workflow file: %v", err)
@@ -356,7 +355,7 @@ jobs:
 					defer wg.Done()
 					for i := 0; i < 5; i++ {
 						file := filepath.Join(repoPath, fmt.Sprintf("file-%d.txt", i))
-						if err := os.WriteFile(file, []byte("test content"), 0644); err != nil {
+						if err := os.WriteFile(file, []byte("test content"), 0600); err != nil {
 							results <- fmt.Errorf("failed to write file: %v", err)
 							return
 						}
@@ -386,7 +385,7 @@ jobs:
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					scanner := updater.NewScanner()
+					scanner := updater.NewScanner(repoPath)
 					for i := 0; i < 3; i++ {
 						if _, err := scanner.ScanWorkflows(filepath.Join(repoPath, ".github", "workflows")); err != nil {
 							results <- fmt.Errorf("failed to scan workflows: %v", err)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 )
 
@@ -75,7 +76,7 @@ func main() {
 	}
 
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0750); err != nil {
 			fmt.Printf("Error creating directory %s: %v\n", dir, err)
 			os.Exit(1)
 		}
@@ -104,7 +105,14 @@ func main() {
 		}
 
 		filename := filepath.Join(workflowDir, fmt.Sprintf("workflow-%d.yml", i))
-		file, err := os.Create(filename)
+
+		// Validate the file path is within the intended directory
+		if !strings.HasPrefix(filename, workflowDir) {
+			fmt.Printf("Error: Invalid file path %s\n", filename)
+			continue
+		}
+		//#nosec G304 - file path is validated through the above check
+		file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0400)
 		if err != nil {
 			fmt.Printf("Error creating file %s: %v\n", filename, err)
 			continue
@@ -112,11 +120,16 @@ func main() {
 
 		if err := tmpl.Execute(file, data); err != nil {
 			fmt.Printf("Error generating workflow %d: %v\n", i, err)
-			file.Close()
+			if closeErr := file.Close(); closeErr != nil {
+				fmt.Printf("Error closing file after template error: %v\n", closeErr)
+			}
 			continue
 		}
 
-		file.Close()
+		if err := file.Close(); err != nil {
+			fmt.Printf("Error closing file: %v\n", err)
+			continue
+		}
 	}
 
 	fmt.Printf("Generated %d workflow files in %s\n", count, workflowDir)

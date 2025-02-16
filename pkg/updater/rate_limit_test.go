@@ -2,12 +2,25 @@ package updater
 
 import (
 	"context"
+	"os"
 	"sync"
 	"testing"
 	"time"
 )
 
 func TestScannerRateLimiting(t *testing.T) {
+	// Create temporary directory for tests
+	tempDir, err := os.MkdirTemp("", "scanner-rate-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Set secure permissions
+	if err := os.Chmod(tempDir, 0750); err != nil {
+		t.Fatalf("Failed to set temp dir permissions: %v", err)
+	}
+
 	tests := []struct {
 		name         string
 		rateLimit    int
@@ -36,7 +49,7 @@ func TestScannerRateLimiting(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			scanner := NewScanner()
+			scanner := NewScanner(tempDir)
 			scanner.SetRateLimit(tt.rateLimit, tt.rateDuration)
 
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
@@ -78,6 +91,18 @@ func TestScannerRateLimiting(t *testing.T) {
 }
 
 func TestScannerTimeout(t *testing.T) {
+	// Create temporary directory for tests
+	tempDir, err := os.MkdirTemp("", "scanner-timeout-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Set secure permissions
+	if err := os.Chmod(tempDir, 0750); err != nil {
+		t.Fatalf("Failed to set temp dir permissions: %v", err)
+	}
+
 	tests := []struct {
 		name        string
 		timeout     time.Duration
@@ -100,7 +125,7 @@ func TestScannerTimeout(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			scanner := NewScanner()
+			scanner := NewScanner(tempDir)
 
 			ctx, cancel := context.WithTimeout(context.Background(), tt.timeout)
 			defer cancel()
@@ -124,7 +149,19 @@ func TestScannerTimeout(t *testing.T) {
 }
 
 func TestScannerConcurrentOperations(t *testing.T) {
-	scanner := NewScanner()
+	// Create temporary directory for tests
+	tempDir, err := os.MkdirTemp("", "scanner-concurrent-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Set secure permissions
+	if err := os.Chmod(tempDir, 0750); err != nil {
+		t.Fatalf("Failed to set temp dir permissions: %v", err)
+	}
+
+	scanner := NewScanner(tempDir)
 	scanner.SetRateLimit(5, time.Second)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)

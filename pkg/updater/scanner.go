@@ -19,6 +19,35 @@ type Scanner struct {
 	lastOp       time.Time
 	opCount      int
 	mu           sync.Mutex
+	baseDir      string // Base directory for path validation
+}
+
+// validatePath ensures the path is within the allowed directory
+func (s *Scanner) validatePath(path string) error {
+	if s.baseDir == "" {
+		return fmt.Errorf("base directory not set")
+	}
+
+	// Clean and resolve the paths
+	cleanPath := filepath.Clean(path)
+	cleanBase := filepath.Clean(s.baseDir)
+
+	// Get absolute paths
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve path: %w", err)
+	}
+	absBase, err := filepath.Abs(cleanBase)
+	if err != nil {
+		return fmt.Errorf("failed to resolve base path: %w", err)
+	}
+
+	// Check if the path is within the base directory
+	if !strings.HasPrefix(absPath, absBase) {
+		return fmt.Errorf("path is outside of allowed directory: %s", path)
+	}
+
+	return nil
 }
 
 // parseActionReference parses an action reference string (e.g., "actions/checkout@v2" or "actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675")
@@ -66,10 +95,11 @@ func parseActionReference(ref string, path string, comments []string) (*ActionRe
 }
 
 // NewScanner creates a new Scanner instance
-func NewScanner() *Scanner {
+func NewScanner(baseDir string) *Scanner {
 	return &Scanner{
 		rateLimit:    60,          // Default to 60 operations
 		rateDuration: time.Minute, // Per minute
+		baseDir:      filepath.Clean(baseDir),
 	}
 }
 
@@ -123,6 +153,11 @@ func (s *Scanner) checkTimeout(ctx context.Context) error {
 
 // ScanWorkflows finds all GitHub Actions workflow files in the repository
 func (s *Scanner) ScanWorkflows(dir string) ([]string, error) {
+	// Validate the directory path
+	if err := s.validatePath(dir); err != nil {
+		return nil, fmt.Errorf("invalid directory path: %w", err)
+	}
+
 	// Check if workflows directory exists
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("workflows directory not found at %s", dir)
@@ -139,9 +174,15 @@ func (s *Scanner) ScanWorkflows(dir string) ([]string, error) {
 			return nil
 		}
 
+		// Validate each file path
+		if err := s.validatePath(path); err != nil {
+			return err
+		}
+
 		// Check for YAML files
 		if strings.HasSuffix(info.Name(), ".yml") || strings.HasSuffix(info.Name(), ".yaml") {
 			// Check if file is readable
+			//#nosec G304 - path is validated through validatePath
 			if _, err := os.ReadFile(path); err != nil {
 				return err
 			}
@@ -160,6 +201,12 @@ func (s *Scanner) ScanWorkflows(dir string) ([]string, error) {
 
 // ParseActionReferences extracts action references from a workflow file
 func (s *Scanner) ParseActionReferences(path string) ([]ActionReference, error) {
+	// Validate the file path
+	if err := s.validatePath(path); err != nil {
+		return nil, fmt.Errorf("invalid file path: %w", err)
+	}
+
+	//#nosec G304 - path is validated through validatePath
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("error reading workflow file: %w", err)

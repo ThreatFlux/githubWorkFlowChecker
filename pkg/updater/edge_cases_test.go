@@ -139,8 +139,6 @@ jobs:
 		},
 	}
 
-	scanner := NewScanner()
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temporary directory
@@ -150,9 +148,17 @@ jobs:
 			}
 			defer os.RemoveAll(tempDir)
 
+			// Set secure permissions on temp directory
+			if err := os.Chmod(tempDir, 0750); err != nil {
+				t.Fatalf("Failed to set temp dir permissions: %v", err)
+			}
+
+			// Create scanner with temp directory as base
+			scanner := NewScanner(tempDir)
+
 			// Create test file
 			testFile := filepath.Join(tempDir, "workflow.yml")
-			err = os.WriteFile(testFile, []byte(tt.content), 0644)
+			err = os.WriteFile(testFile, []byte(tt.content), 0600)
 			if err != nil {
 				t.Fatalf("Failed to create test file: %v", err)
 			}
@@ -244,8 +250,6 @@ jobs:
 		},
 	}
 
-	scanner := NewScanner()
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temporary directory
@@ -255,9 +259,17 @@ jobs:
 			}
 			defer os.RemoveAll(tempDir)
 
+			// Set secure permissions on temp directory
+			if err := os.Chmod(tempDir, 0750); err != nil {
+				t.Fatalf("Failed to set temp dir permissions: %v", err)
+			}
+
+			// Create scanner with temp directory as base
+			scanner := NewScanner(tempDir)
+
 			// Create test file
 			testFile := filepath.Join(tempDir, "workflow.yml")
-			err = os.WriteFile(testFile, []byte(tt.content), 0644)
+			err = os.WriteFile(testFile, []byte(tt.content), 0600)
 			if err != nil {
 				t.Fatalf("Failed to create test file: %v", err)
 			}

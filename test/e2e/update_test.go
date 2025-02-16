@@ -24,8 +24,8 @@ func TestEndToEndUpdate(t *testing.T) {
 		{
 			name: "ScanAndDetectUpdates",
 			testFunc: func(t *testing.T, repoPath string, env *testEnv) {
-				// Create scanner
-				scanner := updater.NewScanner()
+				// Create scanner with base directory
+				scanner := updater.NewScanner(repoPath)
 
 				// Get workflows directory path
 				workflowsDir := filepath.Join(repoPath, ".github", "workflows")
@@ -46,8 +46,8 @@ func TestEndToEndUpdate(t *testing.T) {
 				// Create version checker with GitHub token
 				checker := updater.NewDefaultVersionChecker(os.Getenv("GITHUB_TOKEN"))
 
-				// Create update manager
-				manager := updater.NewUpdateManager()
+				// Create update manager with repository root as base directory
+				manager := updater.NewUpdateManager(repoPath)
 
 				// Process each workflow file
 				var allUpdates []*updater.Update
@@ -136,8 +136,8 @@ func TestEndToEndUpdate(t *testing.T) {
 		{
 			name: "CreateUpdatePR",
 			testFunc: func(t *testing.T, repoPath string, env *testEnv) {
-				// Create scanner and scan workflow files
-				scanner := updater.NewScanner()
+				// Create scanner with base directory
+				scanner := updater.NewScanner(repoPath)
 				workflowFiles, err := scanner.ScanWorkflows(filepath.Join(repoPath, ".github/workflows"))
 				if err != nil {
 					t.Fatalf("Failed to scan workflow files: %v", err)
@@ -158,12 +158,12 @@ jobs:
       - uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe  # Original version: v4`
 
 				workflowDir := filepath.Join(repoPath, ".github", "workflows")
-				if err := os.MkdirAll(workflowDir, 0755); err != nil {
+				if err := os.MkdirAll(workflowDir, 0750); err != nil {
 					t.Fatalf("Failed to create workflows directory: %v", err)
 				}
 
 				workflowFile := filepath.Join(workflowDir, "test.yml")
-				if err := os.WriteFile(workflowFile, []byte(workflowContent), 0644); err != nil {
+				if err := os.WriteFile(workflowFile, []byte(workflowContent), 0600); err != nil {
 					t.Fatalf("Failed to create workflow file: %v", err)
 				}
 
@@ -181,7 +181,7 @@ jobs:
 				// Process all actions in the workflow
 				var updates []*updater.Update
 				checker := updater.NewDefaultVersionChecker(os.Getenv("GITHUB_TOKEN"))
-				manager := updater.NewUpdateManager()
+				manager := updater.NewUpdateManager(repoPath)
 
 				for _, action := range actions {
 					// Get latest version and hash

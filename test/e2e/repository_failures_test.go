@@ -74,7 +74,7 @@ func TestRepositoryFailures(t *testing.T) {
 				cloneURL := "https://github.com/" + testRepoOwner + "/" + nonExistentRepo + ".git"
 				repoPath := filepath.Join(env.workDir, nonExistentRepo)
 
-				if err := os.MkdirAll(repoPath, 0755); err != nil {
+				if err := os.MkdirAll(repoPath, 0750); err != nil {
 					t.Fatalf("Failed to create repo directory: %v", err)
 				}
 
@@ -95,7 +95,7 @@ func TestRepositoryFailures(t *testing.T) {
 
 				// Make workflows directory read-only with no write permissions
 				workflowDir := filepath.Join(repoPath, ".github", "workflows")
-				if err := os.MkdirAll(workflowDir, 0755); err != nil {
+				if err := os.MkdirAll(workflowDir, 0750); err != nil {
 					t.Fatalf("Failed to create workflows directory: %v", err)
 				}
 				if err := os.Chmod(workflowDir, 0555); err != nil {
@@ -104,7 +104,7 @@ func TestRepositoryFailures(t *testing.T) {
 
 				// Attempt to create workflow file in read-only directory
 				workflowFile := filepath.Join(workflowDir, "test-failure.yml")
-				err := os.WriteFile(workflowFile, []byte("invalid: workflow: content"), 0644)
+				err := os.WriteFile(workflowFile, []byte("invalid: workflow: content"), 0600)
 				if err == nil {
 					t.Error("Expected error when writing to read-only directory, got nil")
 				} else if !os.IsPermission(err) {
@@ -112,7 +112,7 @@ func TestRepositoryFailures(t *testing.T) {
 				}
 
 				// Restore permissions for cleanup
-				if err := os.Chmod(workflowDir, 0755); err != nil {
+				if err := os.Chmod(workflowDir, 0750); err != nil {
 					t.Fatalf("Failed to restore directory permissions: %v", err)
 				}
 			},
@@ -128,7 +128,7 @@ func TestRepositoryFailures(t *testing.T) {
 
 				// Create workflow directory
 				workflowDir := filepath.Join(repoPath, ".github", "workflows")
-				if err := os.MkdirAll(workflowDir, 0755); err != nil {
+				if err := os.MkdirAll(workflowDir, 0750); err != nil {
 					t.Fatalf("Failed to create workflows directory: %v", err)
 				}
 
@@ -141,7 +141,7 @@ invalid:
       - missing: colon
         broken syntax
 `
-				if err := os.WriteFile(workflowFile, []byte(invalidContent), 0644); err != nil {
+				if err := os.WriteFile(workflowFile, []byte(invalidContent), 0600); err != nil {
 					t.Fatalf("Failed to write invalid workflow file: %v", err)
 				}
 
@@ -174,7 +174,7 @@ func (e *testEnv) cloneWithError(cloneURL, repoPath string) error {
 
 // Helper method to create scanner
 func (e *testEnv) createScanner() *updater.Scanner {
-	return updater.NewScanner()
+	return updater.NewScanner(e.workDir)
 }
 
 // Helper method to create command with context

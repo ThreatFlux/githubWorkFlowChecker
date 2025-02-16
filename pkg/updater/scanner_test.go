@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2`,
 			wantErrMsg:  "error parsing workflow YAML",
-			permissions: 0644,
+			permissions: 0600,
 		},
 		{
 			name: "invalid yaml syntax - incorrect indentation",
@@ -36,7 +36,7 @@ test:
    steps:
     - uses: actions/checkout@v2`,
 			wantErrMsg:  "error parsing workflow YAML",
-			permissions: 0644,
+			permissions: 0600,
 		},
 		{
 			name: "malformed action reference - missing @",
@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkoutv2`,
 			wantErrMsg:  "invalid action reference format",
-			permissions: 0644,
+			permissions: 0600,
 		},
 		{
 			name: "malformed action reference - missing owner",
@@ -60,13 +60,13 @@ jobs:
     steps:
       - uses: checkout@v2`,
 			wantErrMsg:  "invalid action name format",
-			permissions: 0644,
+			permissions: 0600,
 		},
 		{
 			name:        "empty yaml document",
 			content:     "",
 			wantErrMsg:  "empty YAML document",
-			permissions: 0644,
+			permissions: 0600,
 		},
 		{
 			name: "invalid yaml syntax - unmatched quotes",
@@ -78,7 +78,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2`,
 			wantErrMsg:  "error parsing workflow YAML",
-			permissions: 0644,
+			permissions: 0600,
 		},
 		{
 			name: "permission error",
@@ -94,8 +94,6 @@ jobs:
 		},
 	}
 
-	scanner := NewScanner()
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temporary directory
@@ -104,6 +102,14 @@ jobs:
 				t.Fatalf("Failed to create temp dir: %v", err)
 			}
 			defer os.RemoveAll(tempDir)
+
+			// Set secure permissions on temp directory
+			if err := os.Chmod(tempDir, 0750); err != nil {
+				t.Fatalf("Failed to set temp dir permissions: %v", err)
+			}
+
+			// Create scanner with temp directory as base
+			scanner := NewScanner(tempDir)
 
 			// Create test file
 			testFile := filepath.Join(tempDir, "workflow.yml")
@@ -142,7 +148,7 @@ func TestScanWorkflowsErrors(t *testing.T) {
 		{
 			name: "permission denied",
 			setup: func(dir string) error {
-				if err := os.MkdirAll(dir, 0755); err != nil {
+				if err := os.MkdirAll(dir, 0750); err != nil {
 					return err
 				}
 				return os.Chmod(dir, 0000)
@@ -152,12 +158,12 @@ func TestScanWorkflowsErrors(t *testing.T) {
 		{
 			name: "invalid workflow file",
 			setup: func(dir string) error {
-				if err := os.MkdirAll(dir, 0755); err != nil {
+				if err := os.MkdirAll(dir, 0750); err != nil {
 					return err
 				}
 				// Create a file with invalid permissions for reading
 				filePath := filepath.Join(dir, "workflow.yml")
-				if err := os.WriteFile(filePath, []byte("invalid: yaml: content"), 0644); err != nil {
+				if err := os.WriteFile(filePath, []byte("invalid: yaml: content"), 0600); err != nil {
 					return err
 				}
 				return os.Chmod(filePath, 0000)
@@ -175,6 +181,11 @@ func TestScanWorkflowsErrors(t *testing.T) {
 			}
 			defer os.RemoveAll(tempDir)
 
+			// Set secure permissions on temp directory
+			if err := os.Chmod(tempDir, 0750); err != nil {
+				t.Fatalf("Failed to set temp dir permissions: %v", err)
+			}
+
 			workflowsDir := filepath.Join(tempDir, ".github", "workflows")
 
 			// Set up test case
@@ -182,7 +193,8 @@ func TestScanWorkflowsErrors(t *testing.T) {
 				t.Fatalf("Failed to set up test: %v", err)
 			}
 
-			scanner := NewScanner()
+			// Create scanner with temp directory as base
+			scanner := NewScanner(tempDir)
 			_, err = scanner.ScanWorkflows(workflowsDir)
 			if err == nil {
 				t.Error("Expected error, got nil")

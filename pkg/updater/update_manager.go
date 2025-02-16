@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -11,11 +12,42 @@ import (
 // DefaultUpdateManager implements the UpdateManager interface
 type DefaultUpdateManager struct {
 	fileLocks sync.Map // Map of file paths to sync.Mutex
+	baseDir   string   // Base directory for path validation
+}
+
+// validatePath ensures the path is within the allowed directory
+func (m *DefaultUpdateManager) validatePath(path string) error {
+	if m.baseDir == "" {
+		return fmt.Errorf("base directory not set")
+	}
+
+	// Clean and resolve the paths
+	cleanPath := filepath.Clean(path)
+	cleanBase := filepath.Clean(m.baseDir)
+
+	// Get absolute paths
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve path: %w", err)
+	}
+	absBase, err := filepath.Abs(cleanBase)
+	if err != nil {
+		return fmt.Errorf("failed to resolve base path: %w", err)
+	}
+
+	// Check if the path is within the base directory
+	if !strings.HasPrefix(absPath, absBase) {
+		return fmt.Errorf("path is outside of allowed directory: %s", path)
+	}
+
+	return nil
 }
 
 // NewUpdateManager creates a new instance of DefaultUpdateManager
-func NewUpdateManager() *DefaultUpdateManager {
-	return &DefaultUpdateManager{}
+func NewUpdateManager(baseDir string) *DefaultUpdateManager {
+	return &DefaultUpdateManager{
+		baseDir: filepath.Clean(baseDir),
+	}
 }
 
 // CreateUpdate creates an update for a given action and its latest version
@@ -33,11 +65,11 @@ func (m *DefaultUpdateManager) CreateUpdate(ctx context.Context, file string, ac
 		originalVersion = action.CommitHash
 	}
 
-		// Add version history comments
-		comments = append(comments,
-			fmt.Sprintf("# Using older hash from %s", originalVersion),
-			fmt.Sprintf("# Original version: %s", originalVersion),
-		)
+	// Add version history comments
+	comments = append(comments,
+		fmt.Sprintf("# Using older hash from %s", originalVersion),
+		fmt.Sprintf("# Original version: %s", originalVersion),
+	)
 
 	return &Update{
 		Action:          action,
@@ -84,7 +116,13 @@ func (m *DefaultUpdateManager) ApplyUpdates(ctx context.Context, updates []*Upda
 // applyFileUpdates applies updates to a single file
 // Note: Caller must hold the file lock
 func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) error {
+	// Validate file path
+	if err := m.validatePath(file); err != nil {
+		return fmt.Errorf("invalid file path: %w", err)
+	}
+
 	// Read file content
+	//#nosec:ignore G304 - file path is validated through validatePath
 	content, err := os.ReadFile(file)
 	if err != nil {
 		return fmt.Errorf("error reading file: %w", err)
@@ -96,25 +134,25 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 	// Sort updates by line number in descending order to avoid line number changes
 	sortUpdatesByLine(updates)
 
-		// Track line number adjustments
-		lineAdjustments := make(map[int]int)
-		
-		// Apply each update
-		for _, update := range updates {
-			// Adjust the line number based on previous updates
-			adjustedLineNumber := update.LineNumber
-			for origLine, adjustment := range lineAdjustments {
-				if update.LineNumber > origLine {
-					adjustedLineNumber += adjustment
-				}
-			}
+	// Track line number adjustments
+	lineAdjustments := make(map[int]int)
 
-			if adjustedLineNumber <= 0 || adjustedLineNumber > len(lines) {
-				return fmt.Errorf("invalid line number %d (adjusted from %d) for file %s", adjustedLineNumber, update.LineNumber, file)
+	// Apply each update
+	for _, update := range updates {
+		// Adjust the line number based on previous updates
+		adjustedLineNumber := update.LineNumber
+		for origLine, adjustment := range lineAdjustments {
+			if update.LineNumber > origLine {
+				adjustedLineNumber += adjustment
 			}
+		}
 
-			// Update the line number for this update
-			update.LineNumber = adjustedLineNumber
+		if adjustedLineNumber <= 0 || adjustedLineNumber > len(lines) {
+			return fmt.Errorf("invalid line number %d (adjusted from %d) for file %s", adjustedLineNumber, update.LineNumber, file)
+		}
+
+		// Update the line number for this update
+		update.LineNumber = adjustedLineNumber
 
 		// Get the line and extract any comments
 		line := lines[adjustedLineNumber-1]
@@ -165,8 +203,8 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 	// Join lines back together
 	newContent := strings.Join(lines, "\n")
 
-	// Write updated content back to file
-	if err := os.WriteFile(file, []byte(newContent), 0644); err != nil {
+	// Write updated content back to file with restrictive permissions
+	if err := os.WriteFile(file, []byte(newContent), 0400); err != nil {
 		return fmt.Errorf("error writing file: %w", err)
 	}
 
@@ -198,4 +236,5 @@ func sortUpdatesByLine(updates []*Update) {
 			}
 		}
 	}
+
 }

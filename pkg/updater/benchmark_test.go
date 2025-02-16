@@ -22,13 +22,18 @@ func BenchmarkScanWorkflows(b *testing.B) {
 	// Set up test data directory
 	testDataDir := filepath.Join(b.TempDir(), "test-repo")
 
+	// Set secure permissions on test directory
+	if err := os.Chmod(testDataDir, 0750); err != nil {
+		b.Fatalf("Failed to set test dir permissions: %v", err)
+	}
+
 	// Run the test with different workflow counts
 	for _, count := range []int{10, 100, 1000} {
 		b.Run(fmt.Sprintf("workflows-%d", count), func(b *testing.B) {
 			// Generate test workflows
 			generateTestWorkflows(b, testDataDir, count)
 
-			scanner := NewScanner()
+			scanner := NewScanner(testDataDir)
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
@@ -121,6 +126,12 @@ func (t *mockTransport) RoundTrip(*http.Request) (*http.Response, error) {
 
 func BenchmarkMemoryUsage(b *testing.B) {
 	testDataDir := filepath.Join(b.TempDir(), "test-repo")
+
+	// Set secure permissions on test directory
+	if err := os.Chmod(testDataDir, 0750); err != nil {
+		b.Fatalf("Failed to set test dir permissions: %v", err)
+	}
+
 	generateTestWorkflows(b, testDataDir, 1000)
 
 	b.ResetTimer()
@@ -129,7 +140,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 	runtime.ReadMemStats(&m)
 	initialAlloc := m.Alloc
 
-	scanner := NewScanner()
+	scanner := NewScanner(testDataDir)
 	workflows, err := scanner.ScanWorkflows(filepath.Join(testDataDir, ".github", "workflows"))
 	if err != nil {
 		b.Fatal(err)
@@ -144,9 +155,15 @@ func BenchmarkMemoryUsage(b *testing.B) {
 
 func BenchmarkConcurrentOperations(b *testing.B) {
 	testDataDir := filepath.Join(b.TempDir(), "test-repo")
+
+	// Set secure permissions on test directory
+	if err := os.Chmod(testDataDir, 0750); err != nil {
+		b.Fatalf("Failed to set test dir permissions: %v", err)
+	}
+
 	generateTestWorkflows(b, testDataDir, 100)
 
-	scanner := NewScanner()
+	scanner := NewScanner(testDataDir)
 	workflows, err := scanner.ScanWorkflows(filepath.Join(testDataDir, ".github", "workflows"))
 	if err != nil {
 		b.Fatal(err)

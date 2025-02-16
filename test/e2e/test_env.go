@@ -6,12 +6,65 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-github/v58/github"
 	"golang.org/x/oauth2"
 )
+
+// allowedGitCommands defines the allowed git commands and their arguments
+var allowedGitCommands = map[string][]string{
+	"clone":  {"clone"},
+	"config": {"config", "user.name", "user.email"},
+	"add":    {"add", "."},
+	"commit": {"commit", "-m", "--author"},
+	"push":   {"push", "origin", "main"},
+}
+
+// validateGitArgs checks if the git command and its arguments are allowed
+func validateGitArgs(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("no git arguments provided")
+	}
+
+	cmd := args[0]
+	allowedArgs, ok := allowedGitCommands[cmd]
+	if !ok {
+		return fmt.Errorf("git command not allowed: %s", cmd)
+	}
+
+	// Special handling for specific commands
+	switch cmd {
+	case "clone":
+		if len(args) != 3 || !strings.HasPrefix(args[1], "https://") {
+			return fmt.Errorf("invalid clone command format")
+		}
+		return nil
+	case "config":
+		if len(args) != 3 || !strings.HasPrefix(args[1], "user.") {
+			return fmt.Errorf("invalid config command format")
+		}
+		return nil
+	}
+
+	// Validate other commands' arguments
+	for _, arg := range args {
+		valid := false
+		for _, allowedArg := range allowedArgs {
+			if strings.HasPrefix(arg, allowedArg) {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("git argument not allowed: %s", arg)
+		}
+	}
+
+	return nil
+}
 
 const (
 	testRepoOwner = "ThreatFlux"
@@ -44,11 +97,17 @@ func setupTestEnv(t *testing.T) *testEnv {
 	tc := oauth2.NewClient(ctx, ts)
 	client := github.NewClient(tc)
 
-	// Create temporary work directory
+	// Create temporary work directory with secure permissions
 	workDir, err := os.MkdirTemp("", "ghactions-updater-e2e-*")
 	if err != nil {
 		cancel()
 		t.Fatalf("Failed to create work directory: %v", err)
+	}
+	// Set secure permissions for work directory
+	//#nosec G302 - 0700 permissions are appropriate for test work directory
+	if err := os.Chmod(workDir, 0700); err != nil {
+		cancel()
+		t.Fatalf("Failed to set work directory permissions: %v", err)
 	}
 
 	return &testEnv{
@@ -78,9 +137,9 @@ func (e *testEnv) cloneTestRepo() string {
 	cloneURL := fmt.Sprintf("https://%s@github.com/%s/%s.git",
 		token, testRepoOwner, testRepo)
 
-	// Create repo directory
+	// Create repo directory with secure permissions
 	repoPath := filepath.Join(e.workDir, testRepo)
-	if err := os.MkdirAll(repoPath, 0755); err != nil {
+	if err := os.MkdirAll(repoPath, 0700); err != nil {
 		e.t.Fatalf("Failed to create repo directory: %v", err)
 	}
 
@@ -111,13 +170,23 @@ func (e *testEnv) cloneTestRepo() string {
 		e.t.Fatal("GitHub token does not have push access to the repository")
 	}
 
-	// Clone the repository
-	cmd := exec.CommandContext(e.ctx, "git", "clone", cloneURL, repoPath)
+	// Validate and execute git clone
+	args := []string{"clone", cloneURL, repoPath}
+	if err := validateGitArgs(args); err != nil {
+		e.t.Fatalf("Invalid git command: %v", err)
+	}
+	//#nosec G204 - git commands are validated through validateGitArgs
+	cmd := exec.CommandContext(e.ctx, "git", args...)
+	cmd.Env = []string{
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + os.Getenv("HOME"),
+		"GITHUB_TOKEN=" + os.Getenv("GITHUB_TOKEN"),
+	}
 	if output, err := cmd.CombinedOutput(); err != nil {
 		e.t.Fatalf("Failed to clone repository: %v\nOutput: %s", err, output)
 	}
 
-	// Configure git
+	// Configure git with validation
 	cmds := []struct {
 		name string
 		args []string
@@ -127,8 +196,17 @@ func (e *testEnv) cloneTestRepo() string {
 	}
 
 	for _, c := range cmds {
+		if err := validateGitArgs(c.args); err != nil {
+			e.t.Fatalf("Invalid git command: %v", err)
+		}
+		//#nosec G204 - git commands are validated through validateGitArgs
 		cmd := exec.CommandContext(e.ctx, "git", c.args...)
 		cmd.Dir = repoPath
+		cmd.Env = []string{
+			"PATH=" + os.Getenv("PATH"),
+			"HOME=" + os.Getenv("HOME"),
+			"GITHUB_TOKEN=" + os.Getenv("GITHUB_TOKEN"),
+		}
 		if output, err := cmd.CombinedOutput(); err != nil {
 			e.t.Fatalf("Failed to %s: %v\nOutput: %s", c.name, err, output)
 		}
@@ -139,12 +217,12 @@ func (e *testEnv) cloneTestRepo() string {
 	workflowFile := filepath.Join(workflowDir, "test.yml")
 
 	if _, err := os.Stat(workflowFile); os.IsNotExist(err) {
-		// Create workflows directory
-		if err := os.MkdirAll(workflowDir, 0755); err != nil {
+		// Create workflows directory with secure permissions
+		if err := os.MkdirAll(workflowDir, 0700); err != nil {
 			e.t.Fatalf("Failed to create workflows directory: %v", err)
 		}
 
-		// Create workflow file
+		// Create workflow file with secure permissions
 		workflowContent := `name: Test
 on: [push]
 jobs:
@@ -154,11 +232,11 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v3
       - uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe  # v4`
 
-		if err := os.WriteFile(workflowFile, []byte(workflowContent), 0644); err != nil {
+		if err := os.WriteFile(workflowFile, []byte(workflowContent), 0400); err != nil {
 			e.t.Fatalf("Failed to create workflow file: %v", err)
 		}
 
-		// Commit and push the workflow file
+		// Commit and push the workflow file with validation
 		cmds = []struct {
 			name string
 			args []string
@@ -169,8 +247,17 @@ jobs:
 		}
 
 		for _, c := range cmds {
+			if err := validateGitArgs(c.args); err != nil {
+				e.t.Fatalf("Invalid git command: %v", err)
+			}
+			//#nosec G204 - git commands are validated through validateGitArgs
 			cmd := exec.CommandContext(e.ctx, "git", c.args...)
 			cmd.Dir = repoPath
+			cmd.Env = []string{
+				"PATH=" + os.Getenv("PATH"),
+				"HOME=" + os.Getenv("HOME"),
+				"GITHUB_TOKEN=" + os.Getenv("GITHUB_TOKEN"),
+			}
 			if output, err := cmd.CombinedOutput(); err != nil {
 				e.t.Fatalf("Failed to %s: %v\nOutput: %s", c.name, err, output)
 			}
