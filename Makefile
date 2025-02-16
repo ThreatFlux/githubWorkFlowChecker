@@ -1,6 +1,6 @@
 # Required versions
 REQUIRED_GO_VERSION = 1.24.0
-REQUIRED_DOCKER_VERSION = 27.5.1
+
 
 # Tool paths and versions
 GO ?= go
@@ -28,11 +28,6 @@ check-versions: ## Check all required tool versions
 	@$(GO) version
 	@$(GO) version | grep -q "go$(REQUIRED_GO_VERSION)" || (echo "Error: Required Go version $(REQUIRED_GO_VERSION) not found" && exit 1)
 	@echo "Go version check passed"
-	
-	@echo "Checking Docker version..."
-	@$(DOCKER) --version
-	@$(DOCKER) --version | grep -q "$(REQUIRED_DOCKER_VERSION)" || (echo "Error: Required Docker version $(REQUIRED_DOCKER_VERSION) not found" && exit 1)
-	@echo "Docker version check passed"
 	
 	@echo "All required versions found"
 
