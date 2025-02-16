@@ -56,7 +56,7 @@ jobs:
       - name: Run e2e tests
         env:
           GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
-        run: make test-e2e
+        run: make e2e
 
   security-scan:
     name: Security Scan

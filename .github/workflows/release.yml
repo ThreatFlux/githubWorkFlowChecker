@@ -78,17 +78,24 @@ jobs:
 
       - name: Build
         run: |
-          GOOS=linux GOARCH=amd64 go build -o ghactions-updater-linux-amd64 ./cmd/ghactions-updater
-          GOOS=darwin GOARCH=amd64 go build -o ghactions-updater-darwin-amd64 ./cmd/ghactions-updater
-          GOOS=windows GOARCH=amd64 go build -o ghactions-updater-windows-amd64.exe ./cmd/ghactions-updater
+          VERSION=${{ steps.version.outputs.version }}
+          COMMIT=$(git rev-parse --short HEAD)
+          
+          GOOS=linux GOARCH=amd64 go build -ldflags="-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o ghactions-updater-linux-amd64 ./cmd/ghactions-updater
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o ghactions-updater-darwin-amd64 ./cmd/ghactions-updater
+          GOOS=windows GOARCH=amd64 go build -ldflags="-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o ghactions-updater-windows-amd64.exe ./cmd/ghactions-updater
 
       - name: Build and push Docker image
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=${{ steps.version.outputs.version }}
+          COMMIT=$(git rev-parse --short HEAD)
           echo $GITHUB_TOKEN | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker build -t ghcr.io/threatflux/ghactions-updater:$VERSION .
+          docker build \
+            --build-arg VERSION=$VERSION \
+            --build-arg COMMIT=$COMMIT \
+            -t ghcr.io/threatflux/ghactions-updater:$VERSION .
           docker tag ghcr.io/threatflux/ghactions-updater:$VERSION ghcr.io/threatflux/ghactions-updater:latest
           docker push ghcr.io/threatflux/ghactions-updater:$VERSION
           docker push ghcr.io/threatflux/ghactions-updater:latest
@@ -121,7 +128,7 @@ jobs:
         run: |
           VERSION=${{ steps.version.outputs.version }}
           docker pull ghcr.io/threatflux/ghactions-updater:$VERSION
-          docker run --rm ghcr.io/threatflux/ghactions-updater:$VERSION version
+          docker run --rm ghcr.io/threatflux/ghactions-updater:$VERSION -version
 
       - name: Generate release notes
         id: release_notes
