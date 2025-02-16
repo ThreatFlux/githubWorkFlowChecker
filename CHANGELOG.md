@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [20250216.release.2] - 2025-02-16
+
 ## [20250216.release.1] - 2025-02-16
 
 ## [20250215.release.1] - 2025-02-15
@@ -12,3 +14,4 @@
 [20250213.release.1]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/20250213.release.1[20250214.release.1]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/20250214.release.1
 [20250215.release.1]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/20250215.release.1
 [20250216.release.1]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/20250216.release.1
+[20250216.release.2]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/20250216.release.2
