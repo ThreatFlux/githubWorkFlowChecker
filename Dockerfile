@@ -12,8 +12,12 @@ RUN go mod download
 # Copy the rest of the source code
 COPY . .
 
+# Build arguments for version information
+ARG VERSION=development
+ARG COMMIT=unknown
+
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o ghactions-updater ./cmd/ghactions-updater
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o ghactions-updater ./cmd/ghactions-updater
 
 # Create final minimal image
 FROM alpine:latest

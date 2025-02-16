@@ -16,9 +16,21 @@ var (
 	owner    = flag.String("owner", "", "Repository owner")
 	repo     = flag.String("repo-name", "", "Repository name")
 	token    = flag.String("token", "", "GitHub token")
+	version  = flag.Bool("version", false, "Print version information")
+)
+
+// Version information
+const (
+	Version = "development"
+	Commit  = "unknown"
 )
 
 func validateFlags() error {
+	if *version {
+		fmt.Printf("ghactions-updater version %s (commit: %s)\n", Version, Commit)
+		os.Exit(0)
+	}
+
 	if *owner == "" {
 		return fmt.Errorf("owner is required")
 	}
