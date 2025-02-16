@@ -72,7 +72,7 @@ jobs:
           check-latest: true
 
       - name: Run vulnerability checks
-        run: make vuln-check
+        run: make security
 
   build:
     name: Build

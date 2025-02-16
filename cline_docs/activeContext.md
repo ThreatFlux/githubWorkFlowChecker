@@ -1,9 +1,20 @@
 # Active Context
 
 ## Current Focus
-Fixed E2E test failures in concurrent PR creation tests
+1. Fixed E2E test failures in concurrent PR creation tests
+2. Added version flag support for Docker verification
+   - Implemented -version flag in main.go
+   - Updated Docker build to include version info
+   - Modified release workflow verification
 
 ## Recent Changes
+- Added version flag support:
+  * Added -version flag to CLI
+  * Implemented version and commit info constants
+  * Updated Docker build with version args
+  * Modified release workflow verification
+  * Updated documentation with version flag usage
+
 - Fixed concurrent PR creation test failures:
   * Resolved line number issues:
     - Added proper workflow file parsing to get accurate line numbers

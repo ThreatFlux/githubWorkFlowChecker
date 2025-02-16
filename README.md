@@ -44,6 +44,16 @@ Options:
 - `-repo-name`: Repository name (required)
 - `-token`: GitHub token (required, can also be set via GITHUB_TOKEN environment variable)
 - `-repo`: Path to repository (default: ".")
+- `-version`: Print version information and exit
+
+Example:
+```bash
+# Check version
+ghactions-updater -version
+
+# Update workflows
+ghactions-updater -owner <owner> -repo-name <repo> -token <github-token>
+```
 
 ### GitHub Actions Workflow
 

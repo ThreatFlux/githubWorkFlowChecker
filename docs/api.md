@@ -4,6 +4,32 @@
 
 The `updater` package provides the core functionality for scanning, checking, and updating GitHub Actions workflow files. It offers a modular architecture through well-defined interfaces that handle different aspects of the update process.
 
+## CLI Interface
+
+The tool provides a command-line interface with the following flags:
+
+```
+-owner string
+    Repository owner (required)
+-repo-name string
+    Repository name (required)
+-token string
+    GitHub token (required, can also be set via GITHUB_TOKEN environment variable)
+-repo string
+    Path to repository (default: ".")
+-version
+    Print version information and exit
+```
+
+Version information includes:
+- Version number (e.g., "20250215.release.1")
+- Commit hash of the build
+
+Example version output:
+```
+ghactions-updater version 20250215.release.1 (commit: abc123)
+```
+
 ## Core Types
 
 ### ActionReference
