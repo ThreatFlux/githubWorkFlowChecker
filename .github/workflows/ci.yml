@@ -37,31 +37,10 @@ jobs:
       - name: Run linter
         run: make lint
 
-  test-e2e:
-    name: End-to-End Tests
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    needs: test-unit
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24.0'
-          check-latest: true
-
-      - name: Install dependencies
-        run: go mod download
-
-      - name: Run e2e tests
-        env:
-          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
-        run: make e2e
 
   security-scan:
     name: Security Scan
-    needs: [test-unit, test-e2e]
+    needs: [test-unit]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

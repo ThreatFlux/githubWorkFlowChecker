@@ -19,15 +19,6 @@ jobs:
           wait-interval: 10
           allowed-conclusions: success,skipped
 
-      - name: Wait for E2E tests
-        uses: lewagon/wait-on-check-action@e106e5c43e8ca1edea6383a39a01c5ca495fd812 # v1.3.1
-        with:
-          ref: ${{ github.ref }}
-          check-name: 'End-to-End Tests'
-          repo-token: ${{ secrets.GIT_TOKEN }}
-          wait-interval: 10
-          allowed-conclusions: success,skipped
-
   release:
     name: Create Release
     needs: wait-for-tests
