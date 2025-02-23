@@ -10,6 +10,7 @@ main() {
     if [[ -z "${GITHUB_OUTPUT}" ]]; then
         export GITHUB_OUTPUT="/tmp/github_output_${RANDOM}"
         touch "${GITHUB_OUTPUT}"
+        chmod 777 "${GITHUB_OUTPUT}"
     fi
     time=$(date)
     echo "time=$time" >> $GITHUB_OUTPUT

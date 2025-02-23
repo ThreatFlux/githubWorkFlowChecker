@@ -18,7 +18,6 @@ ENV CGO_ENABLED=0 \
 WORKDIR /app
 
 # Install required packages with versions pinned
-# Update these versions based on Alpine 3.21 package versions
 RUN apk add --no-cache --virtual .build-deps \
     git=2.47.2-r0 \
     ca-certificates=20241121-r1 \
@@ -68,8 +67,9 @@ RUN apk add --no-cache \
     tzdata=2025a-r0 \
     && addgroup -g ${UID} ${USER} \
     && adduser -D -u ${UID} -G ${USER} ${USER} \
-    && mkdir -p /app \
-    && chown -R ${USER}:${USER} /app
+    && mkdir -p /app /github/workspace /github/env /github/path /github/file_commands \
+    && chown -R ${USER}:${USER} /app /github \
+    && chmod -R 777 /github
 
 WORKDIR /app
 
@@ -98,10 +98,6 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
       com.threatflux.image.created.by="Docker" \
       com.threatflux.image.created.timestamp="${BUILD_DATE}" \
       com.threatflux.sbom.path="/app/sbom.json"
-
-# Best practice: Drop all capabilities and enforce no-new-privileges at runtime
-# Use --security-opt=no-new-privileges:true --security-opt=seccomp=profile.json --cap-drop=ALL
-# when running the container
 
 # Set the entrypoint
 ENTRYPOINT ["/app/entrypoint.sh"]

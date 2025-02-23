@@ -1,116 +1,162 @@
 # GitHub Actions Workflow Checker
-
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/ThreatFlux/githubWorkFlowChecker)](https://github.com/ThreatFlux/githubWorkFlowChecker/releases)
 [![CI](https://github.com/ThreatFlux/githubWorkFlowChecker/actions/workflows/ci.yml/badge.svg)](https://github.com/ThreatFlux/githubWorkFlowChecker/actions/workflows/ci.yml)
 [![Release](https://github.com/ThreatFlux/githubWorkFlowChecker/actions/workflows/release.yml/badge.svg)](https://github.com/ThreatFlux/githubWorkFlowChecker/actions/workflows/release.yml)
 [![codecov](https://codecov.io/gh/ThreatFlux/githubWorkFlowChecker/branch/main/graph/badge.svg)](https://codecov.io/gh/ThreatFlux/githubWorkFlowChecker)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ThreatFlux/githubWorkFlowChecker)](https://goreportcard.com/report/github.com/ThreatFlux/githubWorkFlowChecker)
 [![GoDoc](https://godoc.org/github.com/ThreatFlux/githubWorkFlowChecker?status.svg)](https://godoc.org/github.com/ThreatFlux/githubWorkFlowChecker)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=ThreatFlux_githubWorkFlowChecker&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=ThreatFlux_githubWorkFlowChecker)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A tool to automatically check and update GitHub Actions workflow dependencies. It scans workflow files for action references, checks for newer versions, and creates pull requests with updates.
 
-## Features
+A security-focused tool that automatically updates GitHub Actions workflows to use pinned commit SHAs instead of floating tags, protecting against supply chain attacks while maintaining compatibility.
+
+## 🔐 Security Features
+
+- Automatically updates GitHub Actions to use pinned commit SHAs
+- Prevents supply chain attacks by ensuring verified action versions
+- Maintains workflow compatibility through testing
+- Creates automated pull requests with security improvements
+- Includes version information alongside hash updates
+
+## ✨ Key Features
 
 - Scans GitHub Actions workflow files (`.yml` and `.yaml`)
-- Checks for newer versions of actions using GitHub API
-- Creates pull requests with updates
-- Supports both CLI usage and GitHub Actions workflow
+- Creates pull requests with detailed security improvements
+- Supports both CLI and GitHub Actions workflow usage
 - Handles semantic versioning and commit SHA references
-- Runs in Docker container
+- Runs in a secure Docker container with minimal permissions
+- Provides detailed security reports
 
-## Installation
+## 🚀 Quick Start
 
-### Using Go
+### GitHub Actions Workflow (Recommended)
 
+Add this workflow to your repository:
+
+```yaml
+name: Update GitHub Actions Dependencies
+
+on:
+  schedule:
+    - cron: "0 0 * * 1"  # Runs every Monday
+  workflow_dispatch:      # Manual trigger option
+
+jobs:
+  update-actions:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update GitHub Actions
+        uses: ThreatFlux/githubWorkFlowChecker@v1.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          owner: ${{ github.repository_owner }}
+          repo-name: ${{ github.event.repository.name }}
+          labels: "dependencies,security"
+```
+
+### CLI Installation
+
+#### Using Go
 ```bash
 go install github.com/ThreatFlux/githubWorkFlowChecker/cmd/ghactions-updater@latest
 ```
 
-### Using Docker
-
+#### Using Docker
 ```bash
 docker pull ghcr.io/threatflux/ghactions-updater:latest
 ```
 
-## Usage
+## 📋 Usage
 
-### CLI
+### CLI Options
 
 ```bash
-ghactions-updater -owner <owner> -repo-name <repo> -token <github-token>
+ghactions-updater [options]
 ```
 
-Options:
-- `-owner`: Repository owner (required)
-- `-repo-name`: Repository name (required)
-- `-token`: GitHub token (required, can also be set via GITHUB_TOKEN environment variable)
-- `-repo`: Path to repository (default: ".")
-- `-version`: Print version information and exit
+| Option | Description | Required | Default |
+|--------|-------------|----------|---------|
+| `-token` | GitHub token with PR permissions | ✅ | - |
+| `-owner` | Repository owner | ✅ | - |
+| `-repo-name` | Repository name | ✅ | - |
+| `-repo` | Repository path | ❌ | "." |
+| `-version` | Print version information | ❌ | - |
 
-Example:
-```bash
-# Check version
-ghactions-updater -version
+### Environment Variables
 
-# Update workflows
-ghactions-updater -owner <owner> -repo-name <repo> -token <github-token>
-```
+- `GITHUB_TOKEN`: Alternative to `-token` flag
+- `OWNER`: Alternative to `-owner` flag
+- `REPO_NAME`: Alternative to `-repo-name` flag
 
-### GitHub Actions Workflow
+## 🛠️ Development
 
-```yaml
-name: Update Actions
-
-on:
-  schedule:
-    - cron: '0 0 * * 0'  # Weekly on Sunday
-  workflow_dispatch:
-
-jobs:
-  update:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker://ghcr.io/threatflux/ghactions-updater:latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OWNER: ${{ github.repository_owner }}
-          REPO_NAME: ${{ github.event.repository.name }}
-```
-
-## Development
-
-### Requirements
+### Prerequisites
 
 - Go 1.24.0 or later
 - Make
 - Docker (optional)
+- Git
 
-### Setup
+### Local Setup
 
-1. Clone the repository
+1. Clone the repository:
 ```bash
 git clone https://github.com/ThreatFlux/githubWorkFlowChecker.git
 cd githubWorkFlowChecker
 ```
 
-2. Install dependencies
+2. Install dependencies:
 ```bash
+make install-tools
 go mod download
 ```
 
 ### Common Tasks
 
-- Build binary: `make build`
-- Run tests: `make test`
-- Run linter: `make lint`
-- Build Docker image: `make docker-build`
-- Clean up: `make clean`
+| Command | Description |
+|---------|-------------|
+| `make build` | Build binary |
+| `make test` | Run tests |
+| `make lint` | Run linter |
+| `make security` | Run security checks |
+| `make docker-build` | Build Docker image |
+| `make clean` | Clean up build artifacts |
 
-## Documentation
+## 📚 Documentation
 
-- [API Documentation](docs/api.md) - Detailed documentation of the package API, interfaces, and best practices
-- [Contributing Guidelines](CONTRIBUTING.md) - Guidelines for contributing to the project
+- [Security Policy](SECURITY.md) - Security policy and reporting vulnerabilities
+- [Contributing Guidelines](CONTRIBUTING.md) - Guidelines for contributing
+- [Code of Conduct](CODE_OF_CONDUCT.md) - Community behavior guidelines
 
-## License
+## 🔒 Security
 
-MIT License - see LICENSE file for details.
+- All dependencies are regularly updated and scanned for vulnerabilities
+- Docker images are signed and include SBOMs
+- Actions are pinned to specific commit SHAs
+- Minimal container permissions and secure defaults
+
+Report security vulnerabilities via [GitHub Security Advisories](https://github.com/ThreatFlux/githubWorkFlowChecker/security/advisories/new)
+
+## 📜 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting a pull request.
+
+## 📬 Support
+
+- Open an [issue](https://github.com/ThreatFlux/githubWorkFlowChecker/issues)
+- Start a [discussion](https://github.com/ThreatFlux/githubWorkFlowChecker/discussions)
+- Email: wyattroersma@gmail.com
+
+## ⭐ Acknowledgments
+
+Thanks to all contributors and the GitHub Actions community for making this tool possible.
