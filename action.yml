@@ -1,12 +1,6 @@
 name: 'ThreatFlux Actions Maintainer'
 author: 'ThreatFlux'
-description: |
-  Automated GitHub Actions maintenance and security tool that keeps your workflows up-to-date and secure.
-  - Automatically updates action versions to latest secure releases
-  - Creates pull requests for version updates
-  - Follows security best practices
-  - Runs on a schedule like Dependabot
-  - Helps maintain compliance and security standards
+description: "GitHub Actions maintenance tool: Auto-updates action versions, creates PRs, follows security best practices, runs on schedule like Dependabot to maintain compliance."
 branding:
   icon: 'shield'  # Security-focused icon
   color: 'blue'   # Professional, trust-indicating color
