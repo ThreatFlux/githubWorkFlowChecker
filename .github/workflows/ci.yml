@@ -11,10 +11,14 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+# Using older hash from v4
+# Original version: v4
+uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+# Using older hash from v5
+# Original version: v5
+uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34  # v5.3.0
         with:
           go-version: '1.24.0'
           check-latest: true
@@ -32,7 +36,9 @@ jobs:
           make coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+# Using older hash from v5
+# Original version: v5
+uses: codecov/codecov-action@13ce06bfc6bbe3ecf90edbbf1bc32fe5978ca1d3  # v5.3.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: ThreatFlux/githubWorkFlowChecker
@@ -42,10 +48,14 @@ jobs:
     needs: [test-unit]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+# Using older hash from v4
+# Original version: v4
+uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+# Using older hash from v5
+# Original version: v5
+uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34  # v5.3.0
         with:
           go-version: '1.24.0'
           check-latest: true
@@ -58,10 +68,14 @@ jobs:
     needs: [security-scan]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+# Using older hash from v4
+# Original version: v4
+uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+# Using older hash from v5
+# Original version: v5
+uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34  # v5.3.0
         with:
           go-version: '1.24.0'
           check-latest: true
@@ -73,7 +87,9 @@ jobs:
         run: make docker-build
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+# Using older hash from v4
+# Original version: v4
+uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
         with:
           name: ghactions-updater
           path: bin/ghactions-updater
