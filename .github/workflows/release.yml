@@ -43,12 +43,12 @@ jobs:
           
           if [ -z "$LAST_TAG" ]; then
             # First release of the day
-            VERSION="${DATE}.release.1"
+            VERSION="${DATE}.1.1"
           else
             # Increment patch number
             PATCH=$(echo $LAST_TAG | awk -F. '{print $NF}')
             NEXT_PATCH=$((PATCH + 1))
-            VERSION="${DATE}.release.${NEXT_PATCH}"
+            VERSION="${DATE}.1.${NEXT_PATCH}"
           fi
           
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -100,7 +100,7 @@ jobs:
           tag_name: ${{ steps.version.outputs.version }}
           release_name: Release ${{ steps.version.outputs.version }}
           body: |
-            Release ${{ steps.version.outputs.version }}
+            ${{ steps.version.outputs.version }}
             
             ## Changes
             ${{ github.event.head_commit.message }}
