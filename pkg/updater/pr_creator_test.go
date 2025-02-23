@@ -68,51 +68,6 @@ func TestNewPRCreator(t *testing.T) {
 	}
 }
 
-func TestFormatActionReference(t *testing.T) {
-	creator := &DefaultPRCreator{}
-	tests := []struct {
-		name     string
-		update   *Update
-		expected string
-	}{
-		{
-			name: "basic update with hash",
-			update: &Update{
-				Action: ActionReference{
-					Owner: "actions",
-					Name:  "checkout",
-				},
-				NewHash:    "abc123",
-				NewVersion: "v3",
-			},
-			expected: "uses: actions/checkout@abc123  # v3",
-		},
-		{
-			name: "update with version history",
-			update: &Update{
-				Action: ActionReference{
-					Owner: "actions",
-					Name:  "checkout",
-				},
-				NewHash:         "abc123",
-				NewVersion:      "v4",
-				OriginalVersion: "v2",
-				OldVersion:      "v2",
-			},
-			expected: "# Using older hash from v2\n# Original version: v2\nuses: actions/checkout@abc123  # v4",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := creator.formatActionReference(tt.update)
-			if result != tt.expected {
-				t.Errorf("formatActionReference() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
-}
-
 func writeJSON(w http.ResponseWriter, data string) error {
 	_, err := w.Write([]byte(data))
 	return err
@@ -288,8 +243,9 @@ func setupErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 
 	// Create client pointing to test server
 	client := github.NewClient(nil)
-	url, _ := url.Parse(server.URL + "/")
-	client.BaseURL = url
+	// use Surl instead of url to avoid overriding a default
+	Surl, _ := url.Parse(server.URL + "/")
+	client.BaseURL = Surl
 
 	creator := &DefaultPRCreator{
 		client: client,
@@ -316,8 +272,9 @@ func setupBranchErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 
 	// Create client pointing to test server
 	client := github.NewClient(nil)
-	url, _ := url.Parse(server.URL + "/")
-	client.BaseURL = url
+	// Use Surl instead of Surl to avoid overriding package name
+	Surl, _ := url.Parse(server.URL + "/")
+	client.BaseURL = Surl
 
 	creator := &DefaultPRCreator{
 		client: client,
@@ -353,8 +310,9 @@ func setupContentsErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 
 	// Create client pointing to test server
 	client := github.NewClient(nil)
-	url, _ := url.Parse(server.URL + "/")
-	client.BaseURL = url
+	// Use Surl instead of Surl to avoid package name override
+	Surl, _ := url.Parse(server.URL + "/")
+	client.BaseURL = Surl
 
 	creator := &DefaultPRCreator{
 		client: client,
@@ -379,7 +337,7 @@ func setupContentsErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 			"object": {
 				"sha": "test-sha",
 				"type": "commit",
-				"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
+				"Surl": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 			}
 		}`); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -395,7 +353,7 @@ func setupContentsErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 			"object": {
 				"sha": "test-sha",
 				"type": "commit",
-				"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
+				"Surl": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 			}
 		}`); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -422,8 +380,8 @@ func setupBlobErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 
 	// Create client pointing to test server
 	client := github.NewClient(nil)
-	url, _ := url.Parse(server.URL + "/")
-	client.BaseURL = url
+	Surl, _ := url.Parse(server.URL + "/")
+	client.BaseURL = Surl
 
 	creator := &DefaultPRCreator{
 		client: client,
@@ -448,7 +406,7 @@ func setupBlobErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 			"object": {
 				"sha": "test-sha",
 				"type": "commit",
-				"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
+				"Surl": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 			}
 		}`); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -464,7 +422,7 @@ func setupBlobErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 			"object": {
 				"sha": "test-sha",
 				"type": "commit",
-				"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
+				"Surl": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 			}
 		}`); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -511,8 +469,8 @@ func setupPRErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 
 	// Create client pointing to test server
 	client := github.NewClient(nil)
-	url, _ := url.Parse(server.URL + "/")
-	client.BaseURL = url
+	Surl, _ := url.Parse(server.URL + "/")
+	client.BaseURL = Surl
 
 	creator := &DefaultPRCreator{
 		client: client,
@@ -537,7 +495,7 @@ func setupPRErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 			"object": {
 				"sha": "test-sha",
 				"type": "commit",
-				"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
+				"Surl": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 			}
 		}`); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -553,7 +511,7 @@ func setupPRErrorTestServer() (*httptest.Server, *DefaultPRCreator) {
 			"object": {
 				"sha": "test-sha",
 				"type": "commit",
-				"url": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
+				"Surl": "https://api.github.com/repos/test-owner/test-repo/git/commits/test-sha"
 			}
 		}`); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

@@ -65,12 +65,6 @@ func (m *DefaultUpdateManager) CreateUpdate(ctx context.Context, file string, ac
 		originalVersion = action.CommitHash
 	}
 
-	// Add version history comments
-	comments = append(comments,
-		fmt.Sprintf("# Using older hash from %s", originalVersion),
-		fmt.Sprintf("# Original version: %s", originalVersion),
-	)
-
 	return &Update{
 		Action:          action,
 		OldVersion:      action.Version,
@@ -167,17 +161,6 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 		newRef := fmt.Sprintf("%s/%s@%s", update.Action.Owner, update.Action.Name, update.NewHash)
 		mainPart = strings.Replace(mainPart, oldRef, newRef, -1)
 
-		// Use the update's comments if available, otherwise generate them
-		var comments []string
-		if len(update.Comments) > 0 {
-			comments = update.Comments
-		} else {
-			comments = []string{
-				fmt.Sprintf("# Using older hash from %s", update.OriginalVersion),
-				fmt.Sprintf("# Original version: %s", update.OriginalVersion),
-			}
-		}
-
 		// Reconstruct the line with comments and version comment
 		var newLine string
 		if update.VersionComment != "" {
@@ -189,7 +172,6 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 		// Insert version history comments before the line
 		newLines := make([]string, 0, len(lines)+2)
 		newLines = append(newLines, lines[:adjustedLineNumber-1]...)
-		newLines = append(newLines, comments...)
 		newLines = append(newLines, newLine)
 		if adjustedLineNumber < len(lines) {
 			newLines = append(newLines, lines[adjustedLineNumber:]...)
@@ -197,7 +179,7 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 		lines = newLines
 
 		// Record the line number adjustment for subsequent updates
-		lineAdjustments[update.LineNumber] = len(comments)
+		lineAdjustments[update.LineNumber] = len(lines)
 	}
 
 	// Join lines back together

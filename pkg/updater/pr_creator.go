@@ -108,14 +108,8 @@ func (c *DefaultPRCreator) createBranch(ctx context.Context, branchName string) 
 func (c *DefaultPRCreator) formatActionReference(update *Update) string {
 	var sb strings.Builder
 
-	// Add version history comment if we have an original version
-	if update.OriginalVersion != "" {
-		sb.WriteString(fmt.Sprintf("# Using older hash from %s\n", update.OriginalVersion))
-		sb.WriteString(fmt.Sprintf("# Original version: %s\n", update.OriginalVersion))
-	}
-
 	// Add the action reference with hash
-	sb.WriteString(fmt.Sprintf("uses: %s/%s@%s", update.Action.Owner, update.Action.Name, update.NewHash))
+	sb.WriteString(fmt.Sprintf("        uses: %s/%s@%s", update.Action.Owner, update.Action.Name, update.NewHash))
 
 	// Add current version comment
 	if update.NewVersion != "" {

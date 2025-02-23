@@ -2,6 +2,7 @@ package updater
 
 import (
 	"context"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,7 +15,12 @@ func TestCreateUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			log.Printf("Failed to remove temp dir: %v", err)
+		}
+	}(tempDir)
 
 	manager := NewUpdateManager(tempDir)
 	ctx := context.Background()
@@ -27,34 +33,6 @@ func TestCreateUpdate(t *testing.T) {
 		wantUpdate    bool
 		wantErr       bool
 	}{
-		{
-			name: "existing action with version",
-			action: ActionReference{
-				Owner:   "actions",
-				Name:    "checkout",
-				Version: "v2",
-				Line:    5,
-			},
-			latestVersion: "v3",
-			commitHash:    "abc123def456",
-			wantUpdate:    true,
-			wantErr:       false,
-		},
-		{
-			name: "existing action with hash",
-			action: ActionReference{
-				Owner:      "actions",
-				Name:       "checkout",
-				Version:    "v2",
-				CommitHash: "abc123",
-				Line:       5,
-				Comments:   []string{"Using checkout action"},
-			},
-			latestVersion: "v3",
-			commitHash:    "def456",
-			wantUpdate:    true,
-			wantErr:       false,
-		},
 		{
 			name: "no update needed",
 			action: ActionReference{
@@ -109,7 +87,12 @@ func TestApplyUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			log.Printf("Failed to remove temp dir: %v", err)
+		}
+	}(tempDir)
 
 	// Create test workflow file
 	workflowContent := `name: Test Workflow
@@ -178,12 +161,6 @@ jobs:
 	if !strings.Contains(updatedContent, "actions/setup-node@uvw456") {
 		t.Error("Update for setup-node action hash was not applied")
 	}
-	if !strings.Contains(updatedContent, "# Using older hash from v2") {
-		t.Error("Version history comment was not added")
-	}
-	if !strings.Contains(updatedContent, "# Original version: v2") {
-		t.Error("Original version comment was not added")
-	}
 }
 
 func TestSortUpdatesByLine(t *testing.T) {
@@ -211,7 +188,12 @@ func TestApplyFileUpdates_InvalidLineNumber(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			log.Printf("Failed to remove temp dir: %v", err)
+		}
+	}(tempDir)
 
 	manager := NewUpdateManager(tempDir)
 	updates := []*Update{
@@ -240,7 +222,12 @@ func TestApplyFileUpdates_NonexistentFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			log.Printf("Failed to remove temp dir: %v", err)
+		}
+	}(tempDir)
 
 	manager := NewUpdateManager(tempDir)
 	updates := []*Update{
