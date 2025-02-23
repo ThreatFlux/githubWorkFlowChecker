@@ -17,8 +17,7 @@ ARG VERSION=development
 ARG COMMIT=unknown
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o ghactions-updater .pkg/cmd/ghactions-updater
-
+RUN cd pkg/cmd/ghactions-updater/ &&  CGO_ENABLED=0 GOOS=linux go build -ldflags="-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o ../../../ghactions-updater
 # Create final minimal image
 FROM alpine:latest
 
