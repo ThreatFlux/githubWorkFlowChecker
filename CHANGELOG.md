@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [20250223.release.5] - 2025-02-23
+
 ## [20250223.release.4] - 2025-02-23
 
 ## [20250223.release.3] - 2025-02-23
@@ -45,3 +47,4 @@
 [20250223.release.2]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/20250223.release.2
 [20250223.release.3]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/20250223.release.3
 [20250223.release.4]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/20250223.release.4
+[20250223.release.5]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/20250223.release.5
