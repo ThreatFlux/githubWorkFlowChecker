@@ -25,7 +25,7 @@ jobs:
         run: make build
 
       - name: Run updater
-        run: ./bin/ghactions-updater
+        run: ./bin/ghactions-updater -owner ThreatFlux
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ThreatFlux
