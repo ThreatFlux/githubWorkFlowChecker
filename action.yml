@@ -32,14 +32,6 @@ inputs:
     required: false
     default: 'chore(deps): update GitHub Actions to latest secure versions'
 
-outputs:
-  updates_count:
-    description: 'Number of actions updated in the pull request'
-  pr_url:
-    description: 'URL of the created pull request'
-  security_report:
-    description: 'Summary of security improvements from updates'
-
 runs:
   using: 'docker'
   image: 'Dockerfile'
