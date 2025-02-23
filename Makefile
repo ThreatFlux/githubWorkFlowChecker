@@ -21,7 +21,7 @@ COVERAGE_HTML = coverage.html
 BINARY_NAME = ghactions-updater
 BINARY_PATH = bin/$(BINARY_NAME)
 
-.PHONY: all build test e2e lint clean docker-build check-versions install-tools security help version-info coverage
+.PHONY: all build test lint clean docker-build check-versions install-tools security help version-info coverage
 
 # Version check targets
 .PHONY: check-versions
