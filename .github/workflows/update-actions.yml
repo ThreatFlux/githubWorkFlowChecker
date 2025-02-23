@@ -28,5 +28,5 @@ jobs:
         run: ./bin/ghactions-updater
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OWNER: ${{ github.event.repository.owner }}
+          OWNER: ThreatFlux
           REPO_NAME: ${{ github.event.repository.name }}

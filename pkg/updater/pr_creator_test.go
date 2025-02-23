@@ -171,8 +171,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      # Using older hash from v1
-      # Original version: v1
       - uses: actions/checkout@abc123  # v2`))
 		w.WriteHeader(http.StatusOK)
 		if err := writeJSON(w, `{

@@ -109,7 +109,7 @@ func (c *DefaultPRCreator) formatActionReference(update *Update) string {
 	var sb strings.Builder
 
 	// Add the action reference with hash
-	sb.WriteString(fmt.Sprintf("        uses: %s/%s@%s", update.Action.Owner, update.Action.Name, update.NewHash))
+	sb.WriteString(fmt.Sprintf("uses: %s/%s@%s", update.Action.Owner, update.Action.Name, update.NewHash))
 
 	// Add current version comment
 	if update.NewVersion != "" {
@@ -168,6 +168,8 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 			if lineIdx >= 0 && lineIdx < len(lines) {
 				// Format the new reference with comments
 				newRef := c.formatActionReference(update)
+				// Preserve old line format before the replacement uses
+				newRef = strings.Split(lines[update.LineNumber-1], "uses")[0] + newRef
 				lines[lineIdx] = newRef
 			}
 		}
