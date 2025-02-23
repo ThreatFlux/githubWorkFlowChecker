@@ -22,8 +22,6 @@ func TestSetupTestEnvWithoutToken(t *testing.T) {
 	})
 
 	defer func() {
-		if r := recover(); r == nil {
-		}
 	}()
 
 }
@@ -130,7 +128,10 @@ func TestCloneTestRepo(t *testing.T) {
 				env.workDir = invalidDir
 				defer func() {
 					env.workDir = origWorkDir
-					os.Chmod(invalidDir, 0700) // Reset permissions for cleanup
+					err := os.Chmod(invalidDir, 0700)
+					if err != nil {
+						return
+					} // Reset permissions for cleanup
 				}()
 
 				// This should fail due to permissions
