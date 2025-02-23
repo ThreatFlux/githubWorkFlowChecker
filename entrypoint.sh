@@ -8,7 +8,7 @@ trap 'kill -TERM $PID' TERM INT
 main() {
     echo "Starting ThreatFlux GitHub Workflow Checker..."
     if [[ -z "${GITHUB_OUTPUT}" ]]; then
-        export GITHUB_OUTPUT="/tmp/github_output_${RANDOM}"
+        export GITHUB_OUTPUT="github_output_${RANDOM}"
         touch "${GITHUB_OUTPUT}"
         chmod 777 "${GITHUB_OUTPUT}"
     fi
