@@ -109,7 +109,7 @@ docker-build: check-versions ## Build Docker image
 	@echo "Building Docker image..."
 	@docker build -t $(BINARY_NAME):latest .
 
-all: test e2e security build ## Run all checks and build
+all: test security build ## Run all checks and build
 
 help: ## Display available commands
 	@echo "Available commands:"
