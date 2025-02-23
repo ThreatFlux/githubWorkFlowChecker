@@ -71,10 +71,10 @@ jobs:
         run: |
           VERSION=${{ steps.version.outputs.version }}
           COMMIT=$(git rev-parse --short HEAD)
-          
-          GOOS=linux GOARCH=amd64 go build -ldflags="-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o ghactions-updater-linux-amd64 ./cmd/ghactions-updater
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o ghactions-updater-darwin-amd64 ./cmd/ghactions-updater
-          GOOS=windows GOARCH=amd64 go build -ldflags="-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o ghactions-updater-windows-amd64.exe ./cmd/ghactions-updater
+          cd pkg/cmd/ghactions-updater
+          GOOS=linux GOARCH=amd64 go build -ldflags="-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o ../../../ghactions-updater-linux-amd64 .
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o ../../../ghactions-updater-darwin-amd64 .
+          GOOS=windows GOARCH=amd64 go build -ldflags="-X main.Version=${VERSION} -X main.Commit=${COMMIT}" -o ../../../ghactions-updater-windows-amd64.exe .
 
       - name: Build and push Docker image
         env:
