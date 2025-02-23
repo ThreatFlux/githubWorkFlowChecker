@@ -3,7 +3,6 @@ package updater
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -137,29 +136,29 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 	// Create tree entries for each file
 	var entries []*github.TreeEntry
 	for file, fileUpdates := range fileUpdates {
-		// Convert absolute path to relative path
+		// Convert absolute path to repository-relative path
 		relPath := file
 		if filepath.IsAbs(relPath) {
-			// Find the repository root by looking for .git directory
-			cmd := exec.Command("git", "rev-parse", "--show-toplevel")
-			cmd.Dir = filepath.Dir(file)
-			repoRoot, err := cmd.Output()
-			if err != nil {
-				return fmt.Errorf("error finding repository root: %w", err)
+			// Extract the .github/workflows part of the path
+			parts := strings.Split(relPath, ".github/workflows")
+			if len(parts) != 2 {
+				return fmt.Errorf("invalid workflow file path: %s", file)
 			}
-
-			// Convert to relative path
-			relPath, err = filepath.Rel(strings.TrimSpace(string(repoRoot)), file)
-			if err != nil {
-				return fmt.Errorf("error converting to relative path: %w", err)
-			}
+			relPath = filepath.Join(".github/workflows", strings.TrimPrefix(parts[1], "/"))
 		}
 
 		// Get current file content
 		content, _, _, err := c.client.Repositories.GetContents(ctx, c.owner, c.repo, relPath,
 			&github.RepositoryContentGetOptions{Ref: branch})
 		if err != nil {
-			return fmt.Errorf("error getting file contents: %w", err)
+			// If file doesn't exist in the repository yet, create empty content
+			if strings.Contains(err.Error(), "404") {
+				content = &github.RepositoryContent{
+					Content: github.String(""),
+				}
+			} else {
+				return fmt.Errorf("error getting file contents: %w", err)
+			}
 		}
 
 		// Apply updates to content

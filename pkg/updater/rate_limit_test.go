@@ -2,6 +2,7 @@ package updater
 
 import (
 	"context"
+	"log"
 	"os"
 	"sync"
 	"testing"
@@ -14,7 +15,12 @@ func TestScannerRateLimiting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			log.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}(tempDir)
 
 	// Set secure permissions
 	if err := os.Chmod(tempDir, 0750); err != nil {

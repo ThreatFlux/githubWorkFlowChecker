@@ -86,7 +86,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	// Get GitHub token
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
-		t.Fatal("GITHUB_TOKEN environment variable is required")
+		t.Fatalf("GITHUB_TOKEN environment variable is required")
 	}
 
 	// Create context with timeout

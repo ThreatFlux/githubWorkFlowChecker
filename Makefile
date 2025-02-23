@@ -1,7 +1,6 @@
 # Required versions
 REQUIRED_GO_VERSION = 1.24.0
 
-
 # Tool paths and versions
 GO ?= go
 GOLANGCI_LINT ?= golangci-lint
@@ -14,11 +13,15 @@ BUILD_FLAGS ?= -v
 TEST_FLAGS ?= -v -race -cover
 LINT_FLAGS ?= run --timeout=5m
 
+# Coverage output paths
+COVERAGE_PROFILE = coverage.out
+COVERAGE_HTML = coverage.html
+
 # Binary information
 BINARY_NAME = ghactions-updater
 BINARY_PATH = bin/$(BINARY_NAME)
 
-.PHONY: all build test e2e lint clean docker-build check-versions install-tools security help version-info
+.PHONY: all build test e2e lint clean docker-build check-versions install-tools security help version-info coverage
 
 # Version check targets
 .PHONY: check-versions
@@ -43,9 +46,9 @@ build: check-versions ## Build the application
 	@echo "Building application..."
 	@mkdir -p bin
 	@echo "Running go build with flags: $(BUILD_FLAGS)"
-	@echo "Building from: ./cmd/ghactions-updater"
+	@echo "Building from: .pkg/cmd/ghactions-updater"
 	@echo "Output binary: $(BINARY_PATH)"
-	$(GO) build $(BUILD_FLAGS) -o $(BINARY_PATH) ./cmd/ghactions-updater || (echo "Build failed. See error above." && exit 1)
+	cd pkg/cmd/ghactions-updater && $(GO) build $(BUILD_FLAGS) -o ../../../$(BINARY_PATH)  || (echo "Build failed. See error above." && exit 1)
 	@if [ -f "$(BINARY_PATH)" ]; then \
 		echo "Build successful. Binary created at $(BINARY_PATH)"; \
 	else \
@@ -60,15 +63,24 @@ lint: install-tools ## Run golangci-lint for code analysis
 
 test: ## Run unit tests with coverage
 	@echo "Running tests..."
-	@$(GO) test $(TEST_FLAGS) ./cmd/... ./pkg/... ./tools/...
-
-e2e: ## Run end-to-end tests
-	@echo "Running end-to-end tests..."
 	@if [ -z "$$GITHUB_TOKEN" ]; then \
 		echo "Error: GITHUB_TOKEN environment variable is required for e2e tests"; \
 		exit 1; \
 	fi
-	@$(GO) test $(TEST_FLAGS) -tags=e2e ./test/e2e/...
+	@$(GO) test $(TEST_FLAGS)  ./pkg/...
+
+coverage: ## Generate test coverage report and HTML output
+	@echo "Generating coverage report..."
+	@if [ -z "$$GITHUB_TOKEN" ]; then \
+		echo "Error: GITHUB_TOKEN environment variable is required for coverage"; \
+		exit 1; \
+	fi
+	@$(GO) test -coverprofile=$(COVERAGE_PROFILE) ./pkg/...
+	@$(GO) tool cover -html=$(COVERAGE_PROFILE) -o $(COVERAGE_HTML)
+	@echo "Coverage profile written to: $(COVERAGE_PROFILE)"
+	@echo "HTML coverage report written to: $(COVERAGE_HTML)"
+	@echo "Coverage summary:"
+	@$(GO) tool cover -func=$(COVERAGE_PROFILE)
 
 security: install-tools ## Run security scans
 	@echo "Running security scans..."
@@ -79,11 +91,19 @@ security: install-tools ## Run security scans
 	@echo "Running nancy for dependency scanning..."
 	@go list -json -deps ./... | nancy sleuth || (echo "Nancy security scan failed. See errors above." && exit 1)
 
-clean: ## Remove build artifacts
-	@echo "Cleaning build artifacts..."
+clean: ## Remove build artifacts, test cache, and generated files
+	@echo "Cleaning all artifacts and generated files..."
 	@rm -f $(BINARY_PATH)
+	@rm -f $(COVERAGE_PROFILE)
+	@rm -f $(COVERAGE_HTML)
 	@rm -rf vendor/
-	@go clean -testcache
+	@rm -rf bin/
+	@rm -f *.log
+	@rm -f *.out
+	@rm -f *.test
+	@rm -f *.prof
+	@rm -rf dist/
+	@go clean -cache -testcache -modcache -fuzzcache
 
 docker-build: check-versions ## Build Docker image
 	@echo "Building Docker image..."
