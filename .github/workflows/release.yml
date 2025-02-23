@@ -117,7 +117,7 @@ jobs:
 
       - name: Verify Docker image
         env:
-          GITHUB_TOKEN: ${{ GIT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
         run: |
           VERSION=${{ steps.version.outputs.version }}
           docker pull ghcr.io/threatflux/ghactions-updater:$VERSION
