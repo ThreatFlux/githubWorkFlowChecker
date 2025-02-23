@@ -12,9 +12,6 @@ main() {
         touch "${GITHUB_OUTPUT}"
         chmod 777 "${GITHUB_OUTPUT}"
     fi
-    time=$(date)
-    echo "time=$time" >> $GITHUB_OUTPUT
-
     # Run the main application
     exec /app/ghactions-updater "$@" &
 
