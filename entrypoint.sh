@@ -15,7 +15,7 @@ main() {
     echo "time=$time" >> $GITHUB_OUTPUT
 
     # Run the main application
-    exec /app/githubWorkFlowChecker "$@" &
+    exec /app/ghactions-updater "$@" &
 
     # Store PID for signal handling
     PID=$!
