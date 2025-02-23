@@ -25,8 +25,9 @@ jobs:
         run: make build
 
       - name: Run updater
-        run: ./bin/ghactions-updater -owner ThreatFlux -repo test-repo -repo-name test-repo
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ThreatFlux
           REPO_NAME: ${{ github.event.repository.name }}
+        run: ./bin/ghactions-updater -owner ThreatFlux -repo test-repo -repo-name test-repo
+
