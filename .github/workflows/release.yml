@@ -43,12 +43,12 @@ jobs:
           
           if [ -z "$LAST_TAG" ]; then
             # First release of the day
-            VERSION="${DATE}.1.1"
+            VERSION="v1.${DATE}.1"
           else
             # Increment patch number
             PATCH=$(echo $LAST_TAG | awk -F. '{print $NF}')
             NEXT_PATCH=$((PATCH + 1))
-            VERSION="${DATE}.1.${NEXT_PATCH}"
+            VERSION="v1.${DATE}.${NEXT_PATCH}"
           fi
           
           echo "version=$VERSION" >> $GITHUB_OUTPUT
