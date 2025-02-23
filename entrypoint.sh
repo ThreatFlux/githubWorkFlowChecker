@@ -4,44 +4,19 @@ set -e
 # Setup signal handlers
 trap 'kill -TERM $PID' TERM INT
 
-# Function to validate environment variables
-validate_env() {
-    local required_vars=("GITHUB_TOKEN")
-    local missing_vars=()
-
-    for var in "${required_vars[@]}"; do
-        if [[ -z "${!var}" ]]; then
-            missing_vars+=("$var")
-        fi
-    done
-
-    if [[ ${#missing_vars[@]} -ne 0 ]]; then
-        echo "Error: Required environment variables are not set: ${missing_vars[*]}"
-        exit 1
-    fi
-}
-
-# Function to check GitHub API access
-check_github_access() {
-    if ! curl -s -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user > /dev/null; then
-        echo "Error: Unable to authenticate with GitHub. Please check your token."
-        exit 1
-    fi
-}
-
 # Main execution
 main() {
     echo "Starting ThreatFlux GitHub Workflow Checker..."
-    
-    # Validate environment variables
-    validate_env
-    
-    # Check GitHub API access
-    check_github_access
-    
+    if [[ -z "${GITHUB_OUTPUT}" ]]; then
+        export GITHUB_OUTPUT="/tmp/github_output_${RANDOM}"
+        touch "${GITHUB_OUTPUT}"
+    fi
+    time=$(date)
+    echo "time=$time" >> $GITHUB_OUTPUT
+
     # Run the main application
     exec /app/githubWorkFlowChecker "$@" &
-    
+
     # Store PID for signal handling
     PID=$!
     
