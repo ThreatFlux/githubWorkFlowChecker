@@ -6,6 +6,8 @@
 
 ## [v1.20250223.17] - 2025-02-23
 
+## [v1.20250223.17] - 2025-02-23
+
 ## [20250223.1.17] - 2025-02-23
 
 ## [20250223.release.16] - 2025-02-23
@@ -90,6 +92,7 @@
 [20250223.release.15]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/20250223.release.15
 [20250223.release.16]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/20250223.release.16
 [20250223.1.17]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/20250223.1.17
+[v1.20250223.17]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/v1.20250223.17
 [v1.20250223.17]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/v1.20250223.17
 [v1.20250223.17]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/v1.20250223.17
 [v1.20250223.17]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/v1.20250223.17
