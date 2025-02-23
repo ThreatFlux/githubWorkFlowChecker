@@ -1,5 +1,6 @@
 # Required versions
 REQUIRED_GO_VERSION = 1.24.0
+REQUIRED_DOCKER_VERSION = 24.0.0
 
 # Tool paths and versions
 GO ?= go
@@ -7,6 +8,13 @@ GOLANGCI_LINT ?= golangci-lint
 GOSEC ?= gosec
 GOVULNCHECK ?= govulncheck
 DOCKER ?= docker
+COSIGN ?= cosign
+SYFT ?= syft
+
+# Version information
+VERSION ?= $(shell git describe --tags --always)
+COMMIT ?= $(shell git rev-parse --short HEAD)
+BUILD_DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 
 # Build flags
 BUILD_FLAGS ?= -v
@@ -21,18 +29,22 @@ COVERAGE_HTML = coverage.html
 BINARY_NAME = ghactions-updater
 BINARY_PATH = bin/$(BINARY_NAME)
 
-.PHONY: all build test lint clean docker-build check-versions install-tools security help version-info coverage
+# Docker information
+DOCKER_REGISTRY ?= threatflux
+DOCKER_IMAGE = $(DOCKER_REGISTRY)/$(BINARY_NAME)
+DOCKER_TAG ?= $(VERSION)
+DOCKER_LATEST = $(DOCKER_IMAGE):latest
+
+.PHONY: all build test lint clean docker-build check-versions install-tools security help version-info coverage docker-push docker-sign docker-verify install
 
 # Version check targets
-.PHONY: check-versions
 check-versions: ## Check all required tool versions
 	@echo "Checking required tool versions..."
 	@echo "Checking Go version..."
-	@$(GO) version
 	@$(GO) version | grep -q "go$(REQUIRED_GO_VERSION)" || (echo "Error: Required Go version $(REQUIRED_GO_VERSION) not found" && exit 1)
-	@echo "Go version check passed"
-	
-	@echo "All required versions found"
+	@echo "Checking Docker version..."
+	@$(DOCKER) --version | grep -q "$(REQUIRED_DOCKER_VERSION)" || (echo "Warning: Recommended Docker version $(REQUIRED_DOCKER_VERSION) not found")
+	@echo "All version checks completed"
 
 # Install required tools
 install-tools: ## Install required Go tools
@@ -41,57 +53,82 @@ install-tools: ## Install required Go tools
 	@go install golang.org/x/vuln/cmd/govulncheck@latest
 	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	@go install github.com/sonatype-nexus-community/nancy@latest
+	@go install github.com/sigstore/cosign/cmd/cosign@latest
+	@go install github.com/anchore/syft/cmd/syft@latest
 
 build: check-versions ## Build the application
 	@echo "Building application..."
 	@mkdir -p bin
-	@echo "Running go build with flags: $(BUILD_FLAGS)"
-	@echo "Building from: .pkg/cmd/ghactions-updater"
-	@echo "Output binary: $(BINARY_PATH)"
-	cd pkg/cmd/ghactions-updater && $(GO) build $(BUILD_FLAGS) -o ../../../$(BINARY_PATH)  || (echo "Build failed. See error above." && exit 1)
-	@if [ -f "$(BINARY_PATH)" ]; then \
-		echo "Build successful. Binary created at $(BINARY_PATH)"; \
-	else \
-		echo "Build failed. Binary not created."; \
-		exit 1; \
-	fi
+	cd pkg/cmd/$(BINARY_NAME)/ && $(GO) build $(BUILD_FLAGS) \
+		-ldflags="-X main.Version=$(VERSION) -X main.Commit=$(COMMIT)" \
+		-o ../../../$(BINARY_PATH)
 
 lint: install-tools ## Run golangci-lint for code analysis
 	@echo "Running linters..."
-	@echo "Using golangci-lint with flags: $(LINT_FLAGS)"
-	$(GOLANGCI_LINT) $(LINT_FLAGS) ./... || (echo "Linting failed. See errors above." && exit 1)
+	$(GOLANGCI_LINT) $(LINT_FLAGS) ./...
 
 test: ## Run unit tests with coverage
 	@echo "Running tests..."
 	@if [ -z "$$GITHUB_TOKEN" ]; then \
-		echo "Error: GITHUB_TOKEN environment variable is required for e2e tests"; \
+		echo "Error: GITHUB_TOKEN environment variable is required for tests"; \
 		exit 1; \
 	fi
-	@$(GO) test $(TEST_FLAGS)  ./pkg/...
+	@$(GO) test $(TEST_FLAGS) ./pkg/...
 
-coverage: ## Generate test coverage report and HTML output
+coverage: ## Generate test coverage report
 	@echo "Generating coverage report..."
 	@if [ -z "$$GITHUB_TOKEN" ]; then \
-		echo "Error: GITHUB_TOKEN environment variable is required for coverage"; \
+		echo "Error: GITHUB_TOKEN environment variable is required"; \
 		exit 1; \
 	fi
 	@$(GO) test -coverprofile=$(COVERAGE_PROFILE) ./pkg/...
 	@$(GO) tool cover -html=$(COVERAGE_PROFILE) -o $(COVERAGE_HTML)
-	@echo "Coverage profile written to: $(COVERAGE_PROFILE)"
-	@echo "HTML coverage report written to: $(COVERAGE_HTML)"
-	@echo "Coverage summary:"
 	@$(GO) tool cover -func=$(COVERAGE_PROFILE)
 
 security: install-tools ## Run security scans
 	@echo "Running security scans..."
-	@echo "Running gosec..."
-	@$(GOSEC) ./... || (echo "Security scan failed. See errors above." && exit 1)
-	@echo "Running govulncheck for dependency scanning..."
-	@$(GOVULNCHECK) ./... || (echo "Dependency security scan failed. See errors above." && exit 1)
-	@echo "Running nancy for dependency scanning..."
-	@go list -json -deps ./... | nancy sleuth || (echo "Nancy security scan failed. See errors above." && exit 1)
+	@$(GOSEC) ./...
+	@$(GOVULNCHECK) ./...
+	@go list -json -deps ./... | nancy sleuth
 
-clean: ## Remove build artifacts, test cache, and generated files
+docker-build: check-versions ## Build Docker image
+	@echo "Building Docker image..."
+	@$(DOCKER) build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg COMMIT=$(COMMIT) \
+		--build-arg BUILD_DATE=$(BUILD_DATE) \
+		-t $(DOCKER_IMAGE):$(DOCKER_TAG) \
+		-t $(DOCKER_LATEST) \
+		.
+
+docker-sign: ## Sign Docker image with cosign
+	@echo "Signing Docker image..."
+	@$(COSIGN) sign --key cosign.key $(DOCKER_IMAGE):$(DOCKER_TAG)
+	@$(COSIGN) sign --key cosign.key $(DOCKER_LATEST)
+
+docker-verify: ## Verify Docker image signature
+	@echo "Verifying Docker image signature..."
+	@$(COSIGN) verify --key cosign.pub $(DOCKER_IMAGE):$(DOCKER_TAG)
+
+docker-run: ## Run Docker container with security options
+	@echo "Running Docker container with security options..."
+	@$(DOCKER) run \
+		--security-opt=no-new-privileges:true \
+		--security-opt=seccomp=seccomp.json \
+		--cap-drop=ALL \
+		-e GITHUB_TOKEN \
+		$(DOCKER_IMAGE):$(DOCKER_TAG)
+
+docker-push: docker-build docker-sign ## Push Docker image to registry
+	@echo "Pushing Docker image..."
+	@$(DOCKER) push $(DOCKER_IMAGE):$(DOCKER_TAG)
+	@$(DOCKER) push $(DOCKER_LATEST)
+
+install: build ## Install the binary
+	@echo "Installing $(BINARY_NAME)..."
+	@install -m 755 $(BINARY_PATH) /usr/local/bin/$(BINARY_NAME)
+
+clean: ## Remove build artifacts and generated files
 	@echo "Cleaning all artifacts and generated files..."
 	@rm -f $(BINARY_PATH)
 	@rm -f $(COVERAGE_PROFILE)
@@ -105,18 +142,18 @@ clean: ## Remove build artifacts, test cache, and generated files
 	@rm -rf dist/
 	@go clean -cache -testcache -modcache -fuzzcache
 
-docker-build: check-versions ## Build Docker image
-	@echo "Building Docker image..."
-	@docker build -t $(BINARY_NAME):latest .
-
-all: test security build ## Run all checks and build
+all: test security lint build docker-build ## Run all checks and build
 
 help: ## Display available commands
 	@echo "Available commands:"
 	@grep -h -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 version-info: ## Display version information
-	@echo "Required Versions:"
+	@echo "Build Information:"
+	@echo "  Version:    $(VERSION)"
+	@echo "  Commit:     $(COMMIT)"
+	@echo "  Build Date: $(BUILD_DATE)"
+	@echo "\nRequired Versions:"
 	@echo "  Go:     $(REQUIRED_GO_VERSION)+"
 	@echo "  Docker: $(REQUIRED_DOCKER_VERSION)+"
 	@echo "\nInstalled Versions:"

@@ -1,0 +1,81 @@
+name: 'ThreatFlux Actions Maintainer'
+author: 'ThreatFlux'
+description: |
+  Automated GitHub Actions maintenance and security tool that keeps your workflows up-to-date and secure.
+  - Automatically updates action versions to latest secure releases
+  - Creates pull requests for version updates
+  - Follows security best practices
+  - Runs on a schedule like Dependabot
+  - Helps maintain compliance and security standards
+branding:
+  icon: 'shield'  # Security-focused icon
+  color: 'blue'   # Professional, trust-indicating color
+
+inputs:
+  token:
+    description: 'GitHub token with permissions to create pull requests and access Actions'
+    required: true
+  owner:
+    description: 'Repository owner (organization or user)'
+    required: true
+  repo-name:
+    description: 'Repository name to analyze and update'
+    required: true
+  repo:
+    description: 'Path to the repository (defaults to current directory)'
+    required: false
+    default: '.'
+  schedule:
+    description: 'Cron schedule for automated updates (e.g., "0 0 * * 1" for weekly)'
+    required: false
+    default: '0 0 * * 1'
+  labels:
+    description: 'Labels to add to created pull requests (comma-separated)'
+    required: false
+    default: 'dependencies,actions,security'
+  commit-message:
+    description: 'Custom commit message template for updates'
+    required: false
+    default: 'chore(deps): update GitHub Actions to latest secure versions'
+
+outputs:
+  updates_count:
+    description: 'Number of actions updated in the pull request'
+  pr_url:
+    description: 'URL of the created pull request'
+  security_report:
+    description: 'Summary of security improvements from updates'
+
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - '-token'
+    - ${{ inputs.token }}
+    - '-owner'
+    - ${{ inputs.owner }}
+    - '-repo-name'
+    - ${{ inputs.repo-name }}
+    - '-repo'
+    - ${{ inputs.repo }}
+
+# Example workflow usage:
+#
+# name: Update GitHub Actions
+# on:
+#   schedule:
+#     - cron: "0 0 * * 1"  # Every Monday
+#   workflow_dispatch:      # Manual trigger
+#
+# jobs:
+#   update-actions:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - name: Update Actions
+#         uses: threatflux/githubWorkFlowChecker@v1
+#         with:
+#           token: ${{ secrets.GITHUB_TOKEN }}
+#           owner: ${{ github.repository_owner }}
+#           repo-name: ${{ github.event.repository.name }}
+#           labels: "dependencies,security"

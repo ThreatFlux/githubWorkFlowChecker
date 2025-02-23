@@ -103,7 +103,7 @@ go mod download
 - Build binary: `make build`
 - Run tests: `make test`
 - Run linter: `make lint`
-- Build Docker image: `make docker_build`
+- Build Docker image: `make docker-build`
 - Clean up: `make clean`
 
 ## Documentation
