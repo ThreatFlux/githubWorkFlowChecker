@@ -121,7 +121,7 @@ jobs:
         run: |
           VERSION=${{ steps.version.outputs.version }}
           docker pull ghcr.io/threatflux/ghactions-updater:$VERSION
-          docker run --rm ghcr.io/threatflux/ghactions-updater:$VERSION -version
+          docker run --rm ghcr.io/threatflux/ghactions-updater:$VERSION -h
 
       - name: Generate release notes
         id: release_notes
