@@ -16,7 +16,7 @@ jobs:
           ref: ${{ github.ref }}
           check-name: 'Test'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 10
+          wait-interval: 15
           allowed-conclusions: success,skipped
 
   release:
