@@ -121,10 +121,18 @@ func validatePath(base, path string) error {
 	return nil
 }
 
+// SysOutCall handling for os.Stdout.Sync() call with error handling
+func SysOutCall() {
+	err := os.Stdout.Sync()
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
 func main() {
 	if len(os.Args) != 3 {
 		fmt.Println("Usage: go run generate-test-data.go <output-dir> <workflow-count>")
-		os.Stdout.Sync()
+		SysOutCall()
 		osExit(1)
 		return
 	}
@@ -133,21 +141,21 @@ func main() {
 	count, err := strconv.Atoi(os.Args[2])
 	if err != nil {
 		fmt.Println("Error parsing count:", err)
-		os.Stdout.Sync()
+		SysOutCall()
 		osExit(1)
 		return
 	}
 
 	if count <= 0 {
 		fmt.Println("Workflow count must be positive")
-		os.Stdout.Sync()
+		SysOutCall()
 		osExit(1)
 		return
 	}
 
 	if count > maxWorkflowCount {
 		fmt.Printf("Workflow count exceeds maximum limit of %d\n", maxWorkflowCount)
-		os.Stdout.Sync()
+		SysOutCall()
 		osExit(1)
 		return
 	}
@@ -160,7 +168,7 @@ func main() {
 	// First validate the output directory path
 	if err := validatePath(tempDir, outputDir); err != nil {
 		fmt.Printf("Invalid workflow directory path: %v\n", err)
-		os.Stdout.Sync()
+		SysOutCall()
 		osExit(1)
 		return
 	}
@@ -178,7 +186,7 @@ func main() {
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0750); err != nil {
 			fmt.Printf("Error creating directory %s: %v\n", dir, err)
-			os.Stdout.Sync()
+			SysOutCall()
 			osExit(1)
 			return
 		}
@@ -188,7 +196,7 @@ func main() {
 	tmpl, err := template.New("workflow").Option("missingkey=error").Parse(workflowTemplate)
 	if err != nil {
 		fmt.Printf("Error parsing template: %v\n", err)
-		os.Stdout.Sync()
+		SysOutCall()
 		osExit(1)
 		return
 	}
@@ -230,7 +238,7 @@ func main() {
 		// Validate the file path
 		if err := validatePath(outputDir, filename); err != nil {
 			fmt.Printf("Invalid file path %s: %v\n", filename, err)
-			os.Stdout.Sync()
+			SysOutCall()
 			osExit(1)
 			return
 		}
@@ -239,16 +247,16 @@ func main() {
 		if info, err := os.Stat(workflowDir); err == nil {
 			if info.Mode().Perm()&0200 == 0 {
 				fmt.Printf("Error creating file %s: directory is not writable\n", filename)
-				os.Stdout.Sync()
+				SysOutCall()
 				osExit(1)
 				return
 			}
 		}
-
+		filepath.Clean(filename)
 		file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0400)
 		if err != nil {
 			fmt.Printf("Error creating file %s: %v\n", filename, err)
-			os.Stdout.Sync()
+			SysOutCall()
 			osExit(1)
 			return
 		}
@@ -258,14 +266,14 @@ func main() {
 			if closeErr := file.Close(); closeErr != nil {
 				fmt.Printf("Error closing file after template error: %v\n", closeErr)
 			}
-			os.Stdout.Sync()
+			SysOutCall()
 			osExit(1)
 			return
 		}
 
 		if err := file.Close(); err != nil {
 			fmt.Printf("Error closing file: %v\n", err)
-			os.Stdout.Sync()
+			SysOutCall()
 			osExit(1)
 			return
 		}
@@ -276,5 +284,5 @@ func main() {
 	}
 
 	fmt.Printf("Generated %d workflow files in %s\n", successCount, workflowDir)
-	os.Stdout.Sync()
+	SysOutCall()
 }
