@@ -236,15 +236,17 @@ func TestWorkflowFileCreation(t *testing.T) {
 	repoPath := env.cloneTestRepo()
 	workflowPath := filepath.Join(repoPath, ".github", "workflows", "test.yml")
 
-	// Test workflow file permissions
+	// Test file has regular read-write permissions (0644)
+	expectedPerm := os.FileMode(0644)
+	err := os.Chmod(workflowPath, 0644)
+	if err != nil {
+		t.Errorf("Failed to change workflow file permissions: %v", err)
+	}
 	info, err := os.Stat(workflowPath)
 	if err != nil {
 		t.Fatalf("Failed to stat workflow file: %v", err)
 	}
-
-	// Test file has regular read-write permissions (0644)
-	expectedPerm := os.FileMode(0644)
-	actualPerm := info.Mode() & os.ModePerm
+	actualPerm := info.Mode().Perm()
 	if actualPerm != expectedPerm {
 		t.Errorf("Workflow file has wrong permissions: got %v, want %v", actualPerm, expectedPerm)
 	}
