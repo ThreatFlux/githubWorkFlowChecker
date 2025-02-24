@@ -3,8 +3,10 @@ package updater
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -19,6 +21,10 @@ type DefaultUpdateManager struct {
 func (m *DefaultUpdateManager) validatePath(path string) error {
 	if m.baseDir == "" {
 		return fmt.Errorf("base directory not set")
+	}
+
+	if path == "" {
+		return fmt.Errorf("path is empty")
 	}
 
 	// Clean and resolve the paths
@@ -45,6 +51,12 @@ func (m *DefaultUpdateManager) validatePath(path string) error {
 
 // NewUpdateManager creates a new instance of DefaultUpdateManager
 func NewUpdateManager(baseDir string) *DefaultUpdateManager {
+	// If baseDir is empty, preserve it as empty to trigger validation error
+	if baseDir == "" {
+		return &DefaultUpdateManager{
+			baseDir: "",
+		}
+	}
 	return &DefaultUpdateManager{
 		baseDir: filepath.Clean(baseDir),
 	}
@@ -55,7 +67,9 @@ func (m *DefaultUpdateManager) CreateUpdate(ctx context.Context, file string, ac
 	if action.Version == latestVersion && action.CommitHash == commitHash {
 		return nil, nil
 	}
-
+	if ctx == nil {
+		log.Printf("context is nil")
+	}
 	// Preserve existing comments
 	comments := m.PreserveComments(action)
 
@@ -82,6 +96,10 @@ func (m *DefaultUpdateManager) CreateUpdate(ctx context.Context, file string, ac
 
 // ApplyUpdates applies the given updates to workflow files
 func (m *DefaultUpdateManager) ApplyUpdates(ctx context.Context, updates []*Update) error {
+	// If ctx is empty, log a warning
+	if ctx == nil {
+		log.Println("context is nil")
+	}
 	// Group updates by file
 	fileUpdates := make(map[string][]*Update)
 	for _, update := range updates {
@@ -107,8 +125,6 @@ func (m *DefaultUpdateManager) ApplyUpdates(ctx context.Context, updates []*Upda
 	return nil
 }
 
-// applyFileUpdates applies updates to a single file
-// Note: Caller must hold the file lock
 func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) error {
 	// Validate file path
 	if err := m.validatePath(file); err != nil {
@@ -116,7 +132,6 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 	}
 
 	// Read file content
-	//#nosec:ignore G304 - file path is validated through validatePath
 	content, err := os.ReadFile(file)
 	if err != nil {
 		return fmt.Errorf("error reading file: %w", err)
@@ -125,7 +140,7 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 	// Convert content to string and split into lines
 	lines := strings.Split(string(content), "\n")
 
-	// Sort updates by line number in descending order to avoid line number changes
+	// Sort updates by line number in descending order
 	sortUpdatesByLine(updates)
 
 	// Track line number adjustments
@@ -145,32 +160,39 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 			return fmt.Errorf("invalid line number %d (adjusted from %d) for file %s", adjustedLineNumber, update.LineNumber, file)
 		}
 
-		// Update the line number for this update
-		update.LineNumber = adjustedLineNumber
-
-		// Get the line and extract any comments
+		// Get the line and preserve indentation
 		line := lines[adjustedLineNumber-1]
+		indentation := ""
+		if idx := strings.Index(line, "-"); idx >= 0 {
+			indentation = line[:idx]
+		}
+
+		// Split line into main content and comments
 		parts := strings.SplitN(line, "#", 2)
 		mainPart := strings.TrimSpace(parts[0])
 
-		// Always use hash references
-		oldRef := fmt.Sprintf("%s/%s@%s", update.Action.Owner, update.Action.Name, update.OldHash)
-		if update.OldHash == "" {
-			oldRef = fmt.Sprintf("%s/%s@%s", update.Action.Owner, update.Action.Name, update.OldVersion)
+		// Find and replace the action reference
+		oldRefBase := fmt.Sprintf("%s/%s@", update.Action.Owner, update.Action.Name)
+		idx := strings.Index(mainPart, oldRefBase)
+		if idx >= 0 {
+			// Replace everything after @ until the next space or end of string
+			endIdx := strings.Index(mainPart[idx:], " ")
+			if endIdx == -1 {
+				endIdx = len(mainPart[idx:])
+			}
+			mainPart = mainPart[:idx] + oldRefBase + update.NewHash + mainPart[idx+endIdx:]
 		}
-		newRef := fmt.Sprintf("%s/%s@%s", update.Action.Owner, update.Action.Name, update.NewHash)
-		mainPart = strings.Replace(mainPart, oldRef, newRef, -1)
 
-		// Reconstruct the line with comments and version comment
+		// Reconstruct the line with proper indentation and version comment
 		var newLine string
 		if update.VersionComment != "" {
-			newLine = fmt.Sprintf("%s  %s", strings.TrimSpace(mainPart), update.VersionComment)
+			newLine = fmt.Sprintf("%s%s  %s", indentation, strings.TrimSpace(mainPart), update.VersionComment)
 		} else {
-			newLine = fmt.Sprintf("%s  # %s", strings.TrimSpace(mainPart), update.NewVersion)
+			newLine = fmt.Sprintf("%s%s  # %s", indentation, strings.TrimSpace(mainPart), update.NewVersion)
 		}
 
-		// Insert version history comments before the line
-		newLines := make([]string, 0, len(lines)+2)
+		// Update the lines array
+		newLines := make([]string, 0, len(lines))
 		newLines = append(newLines, lines[:adjustedLineNumber-1]...)
 		newLines = append(newLines, newLine)
 		if adjustedLineNumber < len(lines) {
@@ -178,14 +200,14 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 		}
 		lines = newLines
 
-		// Record the line number adjustment for subsequent updates
-		lineAdjustments[update.LineNumber] = len(lines)
+		// Record the line number adjustment
+		lineAdjustments[update.LineNumber] = len(lines) - len(newLines)
 	}
 
 	// Join lines back together
 	newContent := strings.Join(lines, "\n")
 
-	// Write updated content back to file with restrictive permissions
+	// Write updated content back to file
 	if err := os.WriteFile(file, []byte(newContent), 0400); err != nil {
 		return fmt.Errorf("error writing file: %w", err)
 	}
@@ -211,12 +233,11 @@ func (m *DefaultUpdateManager) PreserveComments(action ActionReference) []string
 
 // sortUpdatesByLine sorts updates by line number in descending order
 func sortUpdatesByLine(updates []*Update) {
-	for i := 0; i < len(updates)-1; i++ {
-		for j := i + 1; j < len(updates); j++ {
-			if updates[i].LineNumber < updates[j].LineNumber {
-				updates[i], updates[j] = updates[j], updates[i]
-			}
-		}
+	if len(updates) <= 1 {
+		return
 	}
 
+	sort.Slice(updates, func(i, j int) bool {
+		return updates[i].LineNumber > updates[j].LineNumber
+	})
 }
