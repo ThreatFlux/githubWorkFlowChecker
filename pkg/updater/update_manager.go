@@ -3,6 +3,7 @@ package updater
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -17,7 +18,7 @@ type DefaultUpdateManager struct {
 	baseDir   string   // Base directory for path validation
 }
 
-// validatePath ensures the path is within the allowed directory
+// validatePath ensures the path is within the allowed directory and has proper permissions
 func (m *DefaultUpdateManager) validatePath(path string) error {
 	if m.baseDir == "" {
 		return fmt.Errorf("base directory not set")
@@ -44,6 +45,17 @@ func (m *DefaultUpdateManager) validatePath(path string) error {
 	// Check if the path is within the base directory
 	if !strings.HasPrefix(absPath, absBase) {
 		return fmt.Errorf("path is outside of allowed directory: %s", path)
+	}
+
+	// Check file existence and basic access
+	fileInfo, err := os.Stat(path)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to access file: %w", err)
+	}
+
+	// If file exists, ensure it's a regular file
+	if err == nil && !fileInfo.Mode().IsRegular() {
+		return fmt.Errorf("not a regular file: %s", path)
 	}
 
 	return nil
@@ -107,32 +119,43 @@ func (m *DefaultUpdateManager) ApplyUpdates(ctx context.Context, updates []*Upda
 	}
 
 	// Process each file with proper locking
-	for file, updates := range fileUpdates {
+	for fileN, updates := range fileUpdates {
 		// Get or create mutex for this file
-		lockInterface, _ := m.fileLocks.LoadOrStore(file, &sync.Mutex{})
+		lockInterface, _ := m.fileLocks.LoadOrStore(fileN, &sync.Mutex{})
 		lock := lockInterface.(*sync.Mutex)
 
 		// Lock the file for exclusive access
 		lock.Lock()
-		err := m.applyFileUpdates(file, updates)
+		err := m.applyFileUpdates(fileN, updates)
 		lock.Unlock()
 
 		if err != nil {
-			return fmt.Errorf("error updating file %s: %w", file, err)
+			return fmt.Errorf("error updating file %s: %w", fileN, err)
 		}
 	}
 
 	return nil
 }
-
-func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) error {
+func (m *DefaultUpdateManager) applyFileUpdates(fileN string, updates []*Update) error {
 	// Validate file path
-	if err := m.validatePath(file); err != nil {
+	if err := m.validatePath(fileN); err != nil {
 		return fmt.Errorf("invalid file path: %w", err)
 	}
+	filepath.Clean(fileN)
+	// Open file with explicit permissions
+	f, err := os.OpenFile(fileN, os.O_RDONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("error opening file: %w", err)
+	}
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			log.Printf("Failed to close file: %v", err)
+		}
+	}(f)
 
-	// Read file content
-	content, err := os.ReadFile(file)
+	// Read file content safely
+	content, err := io.ReadAll(f)
 	if err != nil {
 		return fmt.Errorf("error reading file: %w", err)
 	}
@@ -157,7 +180,8 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 		}
 
 		if adjustedLineNumber <= 0 || adjustedLineNumber > len(lines) {
-			return fmt.Errorf("invalid line number %d (adjusted from %d) for file %s", adjustedLineNumber, update.LineNumber, file)
+			return fmt.Errorf("invalid line number %d (adjusted from %d) for file %s",
+				adjustedLineNumber, update.LineNumber, fileN)
 		}
 
 		// Get the line and preserve indentation
@@ -167,15 +191,13 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 			indentation = line[:idx]
 		}
 
-		// Split line into main content and comments
+		// Apply the update (same as before)
 		parts := strings.SplitN(line, "#", 2)
 		mainPart := strings.TrimSpace(parts[0])
 
-		// Find and replace the action reference
 		oldRefBase := fmt.Sprintf("%s/%s@", update.Action.Owner, update.Action.Name)
 		idx := strings.Index(mainPart, oldRefBase)
 		if idx >= 0 {
-			// Replace everything after @ until the next space or end of string
 			endIdx := strings.Index(mainPart[idx:], " ")
 			if endIdx == -1 {
 				endIdx = len(mainPart[idx:])
@@ -183,12 +205,13 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 			mainPart = mainPart[:idx] + oldRefBase + update.NewHash + mainPart[idx+endIdx:]
 		}
 
-		// Reconstruct the line with proper indentation and version comment
 		var newLine string
 		if update.VersionComment != "" {
-			newLine = fmt.Sprintf("%s%s  %s", indentation, strings.TrimSpace(mainPart), update.VersionComment)
+			newLine = fmt.Sprintf("%s%s  %s", indentation, strings.TrimSpace(mainPart),
+				update.VersionComment)
 		} else {
-			newLine = fmt.Sprintf("%s%s  # %s", indentation, strings.TrimSpace(mainPart), update.NewVersion)
+			newLine = fmt.Sprintf("%s%s  # %s", indentation, strings.TrimSpace(mainPart),
+				update.NewVersion)
 		}
 
 		// Update the lines array
@@ -200,16 +223,27 @@ func (m *DefaultUpdateManager) applyFileUpdates(file string, updates []*Update) 
 		}
 		lines = newLines
 
-		// Record the line number adjustment
 		lineAdjustments[update.LineNumber] = len(lines) - len(newLines)
 	}
 
-	// Join lines back together
-	newContent := strings.Join(lines, "\n")
-
 	// Write updated content back to file
-	if err := os.WriteFile(file, []byte(newContent), 0400); err != nil {
-		return fmt.Errorf("error writing file: %w", err)
+	tempFile := fileN + ".tmp"
+	if err := os.WriteFile(tempFile, []byte(strings.Join(lines, "\n")), 0600); err != nil {
+
+		err := os.Remove(tempFile)
+		if err != nil {
+			return err
+		} // Clean up temp file if write fails
+		return fmt.Errorf("error writing temporary file: %w", err)
+	}
+
+	// Rename temp file to original file (atomic operation)
+	if err := os.Rename(tempFile, fileN); err != nil {
+		err := os.Remove(tempFile)
+		if err != nil {
+			return err
+		} // Clean up temp file if rename fails
+		return fmt.Errorf("error replacing original file: %w", err)
 	}
 
 	return nil
