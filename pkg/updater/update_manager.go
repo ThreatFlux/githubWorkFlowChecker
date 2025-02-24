@@ -229,7 +229,6 @@ func (m *DefaultUpdateManager) applyFileUpdates(fileN string, updates []*Update)
 	// Write updated content back to file
 	tempFile := fileN + ".tmp"
 	if err := os.WriteFile(tempFile, []byte(strings.Join(lines, "\n")), 0600); err != nil {
-
 		err := os.Remove(tempFile)
 		if err != nil {
 			return err

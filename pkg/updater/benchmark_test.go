@@ -3,15 +3,14 @@ package updater
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
-	"strings"
 	"testing"
 	"time"
 
@@ -22,15 +21,10 @@ func BenchmarkScanWorkflows(b *testing.B) {
 	// Set up test data directory
 	testDataDir := filepath.Join(b.TempDir(), "test-repo")
 
-	// Set secure permissions on test directory
-	if err := os.Chmod(testDataDir, 0750); err != nil {
-		b.Fatalf("Failed to set test dir permissions: %v", err)
-	}
-
 	// Run the test with different workflow counts
 	for _, count := range []int{10, 100, 1000} {
 		b.Run(fmt.Sprintf("workflows-%d", count), func(b *testing.B) {
-			// Generate test workflows
+			// Generate test workflows (this will create directories with proper permissions)
 			generateTestWorkflows(b, testDataDir, count)
 
 			scanner := NewScanner(testDataDir)
@@ -58,6 +52,25 @@ func BenchmarkScanWorkflows(b *testing.B) {
 }
 
 func BenchmarkVersionChecker(b *testing.B) {
+	// Create test server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/actions/checkout/releases/latest":
+			_, err := w.Write([]byte(`{"tag_name": "v4"}`))
+			if err != nil {
+				return
+			}
+		case "/repos/actions/checkout/git/ref/tags/v4":
+			_, err := w.Write([]byte(`{"object":{"sha":"abc123def456","type":"commit"}}`))
+			if err != nil {
+				return
+			}
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
 	// Create mock release
 	tagName := "v4"
 	mockRelease := &github.RepositoryRelease{
@@ -66,19 +79,11 @@ func BenchmarkVersionChecker(b *testing.B) {
 
 	// Create version checker with mocks
 	client := github.NewClient(nil)
-	client.BaseURL, _ = url.Parse("http://localhost/")
+	client.BaseURL, _ = url.Parse(server.URL + "/")
 	checker := &DefaultVersionChecker{
 		client: client,
 		mockGetLatestRelease: func(ctx context.Context, owner, repo string) (*github.RepositoryRelease, *github.Response, error) {
 			return mockRelease, &github.Response{Response: &http.Response{StatusCode: http.StatusOK}}, nil
-		},
-	}
-
-	// Set up mock transport for Git.GetRef
-	client.Client().Transport = &mockTransport{
-		Response: &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(`{"object":{"sha":"abc123def456","type":"commit"}}`)),
 		},
 	}
 
@@ -111,27 +116,8 @@ func BenchmarkVersionChecker(b *testing.B) {
 	}
 }
 
-// mockTransport implements http.RoundTripper for testing
-type mockTransport struct {
-	Response *http.Response
-	Error    error
-}
-
-func (t *mockTransport) RoundTrip(*http.Request) (*http.Response, error) {
-	if t.Response != nil && t.Response.Body == nil {
-		t.Response.Body = io.NopCloser(strings.NewReader("{}"))
-	}
-	return t.Response, t.Error
-}
-
 func BenchmarkMemoryUsage(b *testing.B) {
 	testDataDir := filepath.Join(b.TempDir(), "test-repo")
-
-	// Set secure permissions on test directory
-	if err := os.Chmod(testDataDir, 0750); err != nil {
-		b.Fatalf("Failed to set test dir permissions: %v", err)
-	}
-
 	generateTestWorkflows(b, testDataDir, 1000)
 
 	b.ResetTimer()
@@ -155,12 +141,6 @@ func BenchmarkMemoryUsage(b *testing.B) {
 
 func BenchmarkConcurrentOperations(b *testing.B) {
 	testDataDir := filepath.Join(b.TempDir(), "test-repo")
-
-	// Set secure permissions on test directory
-	if err := os.Chmod(testDataDir, 0750); err != nil {
-		b.Fatalf("Failed to set test dir permissions: %v", err)
-	}
-
 	generateTestWorkflows(b, testDataDir, 100)
 
 	scanner := NewScanner(testDataDir)
@@ -215,7 +195,7 @@ func BenchmarkConcurrentOperations(b *testing.B) {
 }
 
 func generateTestWorkflows(b *testing.B, dir string, count int) {
-	cmd := exec.Command("go", "run", "../../tools/generate-test-data.go", dir, fmt.Sprint(count))
+	cmd := exec.Command("go", "run", "../../pkg/tools/generate-test-data.go", dir, fmt.Sprint(count))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		b.Fatalf("failed to generate test data: %v\nOutput: %s", err, output)

@@ -305,7 +305,12 @@ jobs:
 			if err != nil {
 				t.Fatalf("Failed to create temp dir: %v", err)
 			}
-			defer os.RemoveAll(tempDir)
+			defer func(path string) {
+				err := os.RemoveAll(path)
+				if err != nil {
+					t.Fatalf("Failed to remove temp dir: %v", err)
+				}
+			}(tempDir)
 
 			// Create .github/workflows directory
 			workflowsDir := filepath.Join(tempDir, ".github", "workflows")
@@ -334,7 +339,12 @@ jobs:
 			if err != nil {
 				t.Fatalf("Failed to create working directory: %v", err)
 			}
-			defer os.RemoveAll(workingDir)
+			defer func(path string) {
+				err := os.RemoveAll(path)
+				if err != nil {
+					t.Fatalf("Failed to remove working directory: %v", err)
+				}
+			}(workingDir)
 
 			if err := os.Chdir(workingDir); err != nil {
 				t.Fatalf("Failed to change to working directory: %v", err)
@@ -410,7 +420,12 @@ func TestRunWithAbsError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}(tempDir)
 
 	// Create .github/workflows directory
 	workflowsDir := filepath.Join(tempDir, ".github", "workflows")
@@ -484,7 +499,12 @@ func TestMain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}(tempDir)
 
 	// Create .github/workflows directory
 	workflowsDir := filepath.Join(tempDir, ".github", "workflows")
@@ -510,7 +530,12 @@ jobs:
 	if err != nil {
 		t.Fatalf("Failed to create working directory: %v", err)
 	}
-	defer os.RemoveAll(workingDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove working directory: %v", err)
+		}
+	}(workingDir)
 
 	if err := os.Chdir(workingDir); err != nil {
 		t.Fatalf("Failed to change to working directory: %v", err)
@@ -677,7 +702,12 @@ func TestMainFlags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}(tempDir)
 
 	// Create .github/workflows directory
 	workflowsDir := filepath.Join(tempDir, ".github", "workflows")
@@ -707,7 +737,12 @@ jobs:
 	if err != nil {
 		t.Fatalf("Failed to create working directory: %v", err)
 	}
-	defer os.RemoveAll(workingDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove working directory: %v", err)
+		}
+	}(workingDir)
 
 	if err := os.Chdir(workingDir); err != nil {
 		t.Fatalf("Failed to change to working directory: %v", err)
@@ -782,8 +817,16 @@ jobs:
 			// Set up environment
 			os.Args = tt.args
 			for k, v := range tt.envVars {
-				os.Setenv(k, v)
-				defer os.Unsetenv(k)
+				err := os.Setenv(k, v)
+				if err != nil {
+					return
+				}
+				defer func(key string) {
+					err := os.Unsetenv(key)
+					if err != nil {
+						t.Fatalf("Failed to unset environment variable %s: %v", key, err)
+					}
+				}(k)
 			}
 
 			// Reset flags
