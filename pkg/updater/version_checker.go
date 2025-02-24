@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 	"github.com/google/go-github/v58/github"
-	"golang.org/x/oauth2"
 )
 
 // DefaultVersionChecker implements the VersionChecker interface using GitHub API
@@ -19,15 +19,7 @@ type DefaultVersionChecker struct {
 
 // NewDefaultVersionChecker creates a new DefaultVersionChecker instance
 func NewDefaultVersionChecker(token string) *DefaultVersionChecker {
-	var client *github.Client
-	if token != "" {
-		ts := oauth2.StaticTokenSource(
-			&oauth2.Token{AccessToken: token},
-		)
-		client = github.NewClient(oauth2.NewClient(context.Background(), ts))
-	} else {
-		client = github.NewClient(nil)
-	}
+	client := common.NewGitHubClientWithToken(token)
 	return &DefaultVersionChecker{client: client}
 }
 
@@ -82,7 +74,7 @@ func (c *DefaultVersionChecker) IsUpdateAvailable(ctx context.Context, action Ac
 	}
 
 	// If current version is a commit SHA, compare directly
-	if len(action.Version) == 40 && isHexString(action.Version) {
+	if len(action.Version) == 40 && common.IsHexString(action.Version) {
 		return action.Version != latestHash, latestVersion, latestHash, nil
 	}
 

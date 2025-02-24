@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 	"github.com/google/go-github/v58/github"
-	"golang.org/x/oauth2"
 )
 
 // DefaultPRCreator implements the PRCreator interface
@@ -20,13 +20,7 @@ type DefaultPRCreator struct {
 
 // NewPRCreator creates a new instance of DefaultPRCreator
 func NewPRCreator(token, owner, repo string) *DefaultPRCreator {
-	client := github.NewClient(nil)
-	if token != "" {
-		ts := oauth2.StaticTokenSource(
-			&oauth2.Token{AccessToken: token},
-		)
-		client = github.NewClient(oauth2.NewClient(context.Background(), ts))
-	}
+	client := common.NewGitHubClientWithToken(token)
 
 	return &DefaultPRCreator{
 		client: client,

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 	"gopkg.in/yaml.v3"
 )
 
@@ -28,26 +29,8 @@ func (s *Scanner) validatePath(path string) error {
 		return fmt.Errorf("base directory not set")
 	}
 
-	// Clean and resolve the paths
-	cleanPath := filepath.Clean(path)
-	cleanBase := filepath.Clean(s.baseDir)
-
-	// Get absolute paths
-	absPath, err := filepath.Abs(cleanPath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve path: %w", err)
-	}
-	absBase, err := filepath.Abs(cleanBase)
-	if err != nil {
-		return fmt.Errorf("failed to resolve base path: %w", err)
-	}
-
-	// Check if the path is within the base directory
-	if !strings.HasPrefix(absPath, absBase) {
-		return fmt.Errorf("path is outside of allowed directory: %s", path)
-	}
-
-	return nil
+	// Use the common path validation utility
+	return common.ValidatePathWithDefaults(s.baseDir, path)
 }
 
 // parseActionReference parses an action reference string (e.g., "actions/checkout@v2" or "actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675")
@@ -70,7 +53,7 @@ func parseActionReference(ref string, path string, comments []string) (*ActionRe
 	var commitHash string
 
 	// If the reference is a commit hash (40 character hex string)
-	if len(version) == 40 && isHexString(version) {
+	if len(version) == 40 && common.IsHexString(version) {
 		commitHash = version
 		// Look for version in comments
 		for _, comment := range comments {
@@ -182,8 +165,7 @@ func (s *Scanner) ScanWorkflows(dir string) ([]string, error) {
 		// Check for YAML files
 		if strings.HasSuffix(info.Name(), ".yml") || strings.HasSuffix(info.Name(), ".yaml") {
 			// Check if file is readable
-			//#nosec G304 - path is validated through validatePath
-			if _, err := os.ReadFile(path); err != nil {
+			if _, err := common.ReadFile(path); err != nil {
 				return err
 			}
 			workflows = append(workflows, path)
@@ -206,8 +188,8 @@ func (s *Scanner) ParseActionReferences(path string) ([]ActionReference, error) 
 		return nil, fmt.Errorf("invalid file path: %w", err)
 	}
 
-	//#nosec G304 - path is validated through validatePath
-	content, err := os.ReadFile(path)
+	// Read the file using the common utility
+	content, err := common.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("error reading workflow file: %w", err)
 	}

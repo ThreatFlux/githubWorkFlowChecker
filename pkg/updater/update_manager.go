@@ -3,13 +3,13 @@ package updater
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 )
 
 // DefaultUpdateManager implements the UpdateManager interface
@@ -24,41 +24,13 @@ func (m *DefaultUpdateManager) validatePath(path string) error {
 		return fmt.Errorf("base directory not set")
 	}
 
-	if path == "" {
-		return fmt.Errorf("path is empty")
+	// Use the common path validation utility
+	options := common.PathValidationOptions{
+		RequireRegularFile: true,
+		AllowNonExistent:   true,
+		CheckSymlinks:      true,
 	}
-
-	// Clean and resolve the paths
-	cleanPath := filepath.Clean(path)
-	cleanBase := filepath.Clean(m.baseDir)
-
-	// Get absolute paths
-	absPath, err := filepath.Abs(cleanPath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve path: %w", err)
-	}
-	absBase, err := filepath.Abs(cleanBase)
-	if err != nil {
-		return fmt.Errorf("failed to resolve base path: %w", err)
-	}
-
-	// Check if the path is within the base directory
-	if !strings.HasPrefix(absPath, absBase) {
-		return fmt.Errorf("path is outside of allowed directory: %s", path)
-	}
-
-	// Check file existence and basic access
-	fileInfo, err := os.Stat(path)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to access file: %w", err)
-	}
-
-	// If file exists, ensure it's a regular file
-	if err == nil && !fileInfo.Mode().IsRegular() {
-		return fmt.Errorf("not a regular file: %s", path)
-	}
-
-	return nil
+	return common.ValidatePath(m.baseDir, path, options)
 }
 
 // NewUpdateManager creates a new instance of DefaultUpdateManager
@@ -141,21 +113,9 @@ func (m *DefaultUpdateManager) applyFileUpdates(fileN string, updates []*Update)
 	if err := m.validatePath(fileN); err != nil {
 		return fmt.Errorf("invalid file path: %w", err)
 	}
-	filepath.Clean(fileN)
-	// Open file with explicit permissions
-	f, err := os.OpenFile(fileN, os.O_RDONLY, 0600)
-	if err != nil {
-		return fmt.Errorf("error opening file: %w", err)
-	}
-	defer func(f *os.File) {
-		err := f.Close()
-		if err != nil {
-			log.Printf("Failed to close file: %v", err)
-		}
-	}(f)
 
-	// Read file content safely
-	content, err := io.ReadAll(f)
+	// Read file content using common utility
+	content, err := common.ReadFile(fileN)
 	if err != nil {
 		return fmt.Errorf("error reading file: %w", err)
 	}
@@ -226,23 +186,10 @@ func (m *DefaultUpdateManager) applyFileUpdates(fileN string, updates []*Update)
 		lineAdjustments[update.LineNumber] = len(lines) - len(newLines)
 	}
 
-	// Write updated content back to file
-	tempFile := fileN + ".tmp"
-	if err := os.WriteFile(tempFile, []byte(strings.Join(lines, "\n")), 0600); err != nil {
-		err := os.Remove(tempFile)
-		if err != nil {
-			return err
-		} // Clean up temp file if write fails
-		return fmt.Errorf("error writing temporary file: %w", err)
-	}
-
-	// Rename temp file to original file (atomic operation)
-	if err := os.Rename(tempFile, fileN); err != nil {
-		err := os.Remove(tempFile)
-		if err != nil {
-			return err
-		} // Clean up temp file if rename fails
-		return fmt.Errorf("error replacing original file: %w", err)
+	// Write updated content back to file using common utility
+	fileContent := strings.Join(lines, "\n")
+	if err := common.WriteFileString(fileN, fileContent); err != nil {
+		return fmt.Errorf("error writing file: %w", err)
 	}
 
 	return nil

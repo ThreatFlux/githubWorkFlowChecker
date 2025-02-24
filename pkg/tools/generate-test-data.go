@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+
+	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 )
 
 // osExit is used to make the exit function testable
@@ -59,66 +61,17 @@ var commonActions = []Action{
 
 // validatePath checks if the given path is safe to use
 func validatePath(base, path string) error {
-	// Check for empty path first, before any cleaning
-	if strings.TrimSpace(path) == "" {
-		return fmt.Errorf("empty path not allowed")
-	}
-
-	// Check for null bytes in both base and path
-	if strings.ContainsRune(base, 0) || strings.ContainsRune(path, 0) {
-		return fmt.Errorf("path contains null bytes")
-	}
-
+	// Check for path length
 	if len(path) > maxPathLength {
 		return fmt.Errorf("path exceeds maximum length of %d characters", maxPathLength)
 	}
 
-	// Clean and resolve both paths
-	cleanBase := filepath.Clean(base)
-	cleanPath := filepath.Clean(path)
-
-	// Convert to absolute paths if needed
-	absBase := cleanBase
-	if !filepath.IsAbs(cleanBase) {
-		var err error
-		absBase, err = filepath.Abs(cleanBase)
-		if err != nil {
-			return fmt.Errorf("failed to resolve base path: %v", err)
-		}
+	// Use common path validation utility
+	options := common.PathValidationOptions{
+		AllowNonExistent: true,
+		CheckSymlinks:    true,
 	}
-
-	absPath := cleanPath
-	if !filepath.IsAbs(cleanPath) {
-		var err error
-		absPath, err = filepath.Abs(cleanPath)
-		if err != nil {
-			return fmt.Errorf("failed to resolve path: %v", err)
-		}
-	}
-
-	// Check if path is within base directory
-	rel, err := filepath.Rel(absBase, absPath)
-	if err != nil {
-		return fmt.Errorf("failed to determine relative path: %v", err)
-	}
-
-	if strings.HasPrefix(rel, "..") || strings.HasPrefix(rel, "/") {
-		return fmt.Errorf("path traversal attempt detected")
-	}
-
-	// Check for symlinks that point outside the base directory
-	// Only if the path exists and is a symlink
-	if info, err := os.Lstat(absPath); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		evalPath, err := filepath.EvalSymlinks(absPath)
-		if err != nil {
-			return fmt.Errorf("failed to evaluate symlink: %v", err)
-		}
-		if err := validatePath(base, evalPath); err != nil {
-			return fmt.Errorf("symlink points outside allowed directory: %v", err)
-		}
-	}
-
-	return nil
+	return common.ValidatePath(base, path, options)
 }
 
 // SysOutCall handling for os.Stdout.Sync() call with error handling
@@ -176,20 +129,30 @@ func main() {
 	// Clean the path after validation
 	outputDir = filepath.Clean(outputDir)
 
-	// Create output directory structure
-	dirs := []string{
-		outputDir,
-		filepath.Join(outputDir, ".github"),
-		filepath.Join(outputDir, ".github", "workflows"),
+	// Create output directory structure using common file utilities
+	workflowDir := filepath.Join(outputDir, ".github", "workflows")
+	fileOptions := common.FileOptions{
+		BaseDir:    tempDir,
+		CreateDirs: true,
+		Mode:       0750,
+		ValidateOptions: common.PathValidationOptions{
+			AllowNonExistent: true,
+			CheckSymlinks:    true,
+		},
 	}
 
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0750); err != nil {
-			fmt.Printf("Error creating directory %s: %v\n", dir, err)
-			SysOutCall()
-			osExit(1)
-			return
-		}
+	// Create a dummy file to ensure all directories are created
+	dummyFile := filepath.Join(workflowDir, ".gitkeep")
+	if err := common.WriteFileWithOptions(dummyFile, []byte(""), fileOptions); err != nil {
+		fmt.Printf("Error creating directory structure: %v\n", err)
+		SysOutCall()
+		osExit(1)
+		return
+	}
+
+	// Remove the dummy file
+	if err := os.Remove(dummyFile); err != nil {
+		fmt.Printf("Warning: could not remove dummy file: %v\n", err)
 	}
 
 	// Parse template
@@ -202,7 +165,7 @@ func main() {
 	}
 
 	// Generate workflow files
-	workflowDir := filepath.Join(outputDir, ".github", "workflows")
+	// workflowDir is already defined above
 	successCount := 0
 
 	// Keep track of used actions to avoid duplicates
@@ -243,36 +206,37 @@ func main() {
 			return
 		}
 
-		// Check if directory is writable
-		if info, err := os.Stat(workflowDir); err == nil {
+		// Use a buffer to execute the template
+		var buffer strings.Builder
+		if err := tmpl.Execute(&buffer, data); err != nil {
+			fmt.Printf("Error generating workflow %d: %v\n", i, err)
+			SysOutCall()
+			osExit(1)
+			return
+		}
+
+		// Check if the file exists and is read-only
+		if info, err := os.Stat(filename); err == nil {
 			if info.Mode().Perm()&0200 == 0 {
-				fmt.Printf("Error creating file %s: directory is not writable\n", filename)
+				fmt.Printf("Error creating file %s: file exists and is read-only\n", filename)
 				SysOutCall()
 				osExit(1)
 				return
 			}
 		}
-		filepath.Clean(filename)
-		file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0400)
-		if err != nil {
+
+		// Write the file using common file utilities
+		fileOptions := common.FileOptions{
+			BaseDir: outputDir,
+			Mode:    0400,
+			ValidateOptions: common.PathValidationOptions{
+				AllowNonExistent: true,
+				CheckSymlinks:    true,
+			},
+		}
+
+		if err := common.WriteFileWithOptions(filename, []byte(buffer.String()), fileOptions); err != nil {
 			fmt.Printf("Error creating file %s: %v\n", filename, err)
-			SysOutCall()
-			osExit(1)
-			return
-		}
-
-		if err := tmpl.Execute(file, data); err != nil {
-			fmt.Printf("Error generating workflow %d: %v\n", i, err)
-			if closeErr := file.Close(); closeErr != nil {
-				fmt.Printf("Error closing file after template error: %v\n", closeErr)
-			}
-			SysOutCall()
-			osExit(1)
-			return
-		}
-
-		if err := file.Close(); err != nil {
-			fmt.Printf("Error closing file: %v\n", err)
 			SysOutCall()
 			osExit(1)
 			return
