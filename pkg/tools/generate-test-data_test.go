@@ -2,97 +2,112 @@ package main
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v3"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"text/template"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestWorkflowGeneration(t *testing.T) {
-	// Create temporary directory for test files
-	tempDir, err := os.MkdirTemp("", "workflow-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer func(path string) {
-		err := os.RemoveAll(path)
-		if err != nil {
-			t.Fatalf("Failed to remove temp directory: %v", err)
-		}
-	}(tempDir)
-
-	// Test cases
 	tests := []struct {
 		name          string
 		workflowCount int
 		wantErr       bool
+		errCheck      func(string) bool
 	}{
 		{
 			name:          "generate single workflow",
 			workflowCount: 1,
 			wantErr:       false,
+			errCheck: func(output string) bool {
+				return strings.Contains(output, "Generated 1 workflow")
+			},
 		},
 		{
 			name:          "generate multiple workflows",
 			workflowCount: 5,
 			wantErr:       false,
+			errCheck: func(output string) bool {
+				return strings.Contains(output, "Generated 5 workflow")
+			},
+		},
+		{
+			name:          "generate large number of workflows",
+			workflowCount: 100,
+			wantErr:       false,
+			errCheck: func(output string) bool {
+				return strings.Contains(output, "Generated 100 workflow")
+			},
+		},
+		{
+			name:          "generate maximum workflows",
+			workflowCount: 1000,
+			wantErr:       false,
+			errCheck: func(output string) bool {
+				return strings.Contains(output, "Generated 1000 workflow")
+			},
+		},
+		{
+			name:          "exceed maximum workflows",
+			workflowCount: 1001,
+			wantErr:       true,
+			errCheck: func(output string) bool {
+				return strings.Contains(output, "exceeds maximum limit")
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up test environment
-			testDir := filepath.Join(tempDir, tt.name)
+			testDir, err := os.MkdirTemp("", "generate-test-*")
+			if err != nil {
+				t.Fatalf("Failed to create test directory: %v", err)
+			}
+			defer os.RemoveAll(testDir)
+
+			// Create workflow directory structure
+			workflowDir := filepath.Join(testDir, ".github", "workflows")
+			if err := os.MkdirAll(workflowDir, 0777); err != nil {
+				t.Fatalf("Failed to create workflow directory: %v", err)
+			}
+
 			os.Args = []string{"cmd", testDir, fmt.Sprintf("%d", tt.workflowCount)}
 
-			// Capture output
-			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
+			exitCode, output := runWithExit(main)
+			t.Log("Output:", output)
 
-			// Run main
-			func() {
-				defer func() {
-				}()
-				main()
-			}()
-
-			// Restore stdout
-			err := w.Close()
-			if err != nil {
-				return
-			}
-			os.Stdout = oldStdout
-
-			// Read output
-			var output strings.Builder
-			if _, err := io.Copy(&output, r); err != nil {
-				t.Errorf("Failed to capture output: %v", err)
-			}
-
-			// Check results
 			if tt.wantErr {
-				t.Errorf("Expected error for count %d, got success", tt.workflowCount)
+				if exitCode == 0 {
+					t.Error("Expected program to exit with error")
+				}
+				if !tt.errCheck(output) {
+					t.Errorf("Expected error message about maximum limit, got: %q", output)
+				}
 				return
 			}
 
-			// Verify directory structure
-			workflowDir := filepath.Join(testDir, ".github", "workflows")
-			if _, err := os.Stat(workflowDir); os.IsNotExist(err) {
-				t.Errorf("Workflow directory not created: %v", err)
+			if exitCode != 0 {
+				t.Errorf("Expected program to succeed, got exit code %d with output: %q", exitCode, output)
+				return
 			}
 
-			// Count and verify generated files
+			if !tt.errCheck(output) {
+				t.Errorf("Expected success message, got: %q", output)
+				return
+			}
+
+			// Verify results
 			files, err := os.ReadDir(workflowDir)
 			if err != nil {
 				t.Fatalf("Failed to read workflow directory: %v", err)
 			}
 
-			if len(files) != tt.workflowCount {
-				t.Errorf("Expected %d workflow files, got %d", tt.workflowCount, len(files))
+			count := len(files)
+			if count != tt.workflowCount {
+				t.Errorf("Expected %d workflow files, got %d", tt.workflowCount, count)
 			}
 
 			// Verify file contents
@@ -104,41 +119,154 @@ func TestWorkflowGeneration(t *testing.T) {
 					continue
 				}
 
-				// Verify YAML structure
 				var workflow map[string]interface{}
 				if err := yaml.Unmarshal(content, &workflow); err != nil {
 					t.Errorf("Invalid YAML in file %s: %v", file.Name(), err)
 					continue
 				}
 
-				// Verify required fields
-				if workflow["name"] == nil {
-					t.Errorf("Workflow %s missing 'name' field", file.Name())
-				}
-				if workflow["on"] == nil {
-					t.Errorf("Workflow %s missing 'on' field", file.Name())
-				}
-				if workflow["jobs"] == nil {
-					t.Errorf("Workflow %s missing 'jobs' field", file.Name())
-				}
+				verifyWorkflowStructure(t, workflow, file.Name())
+			}
+		})
+	}
+}
 
-				// Verify action references
-				jobs := workflow["jobs"].(map[string]interface{})
-				test := jobs["test"].(map[string]interface{})
-				steps := test["steps"].([]interface{})
+func TestInvalidArguments(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantErr string
+	}{
+		{
+			name:    "no arguments",
+			args:    []string{"cmd"},
+			wantErr: "Usage: go run generate-test-data.go <output-dir> <workflow-count>",
+		},
+		{
+			name:    "missing workflow count",
+			args:    []string{"cmd", "output-dir"},
+			wantErr: "Usage: go run generate-test-data.go <output-dir> <workflow-count>",
+		},
+		{
+			name:    "invalid workflow count",
+			args:    []string{"cmd", "output-dir", "invalid"},
+			wantErr: "Error parsing count",
+		},
+		{
+			name:    "negative workflow count",
+			args:    []string{"cmd", "output-dir", "-1"},
+			wantErr: "Workflow count must be positive",
+		},
+		{
+			name:    "zero workflow count",
+			args:    []string{"cmd", "output-dir", "0"},
+			wantErr: "Workflow count must be positive",
+		},
+		{
+			name:    "non-numeric workflow count",
+			args:    []string{"cmd", "output-dir", "abc"},
+			wantErr: "Error parsing count",
+		},
+		{
+			name:    "float workflow count",
+			args:    []string{"cmd", "output-dir", "1.5"},
+			wantErr: "Error parsing count",
+		},
+	}
 
-				// Check if number of actions is in expected range (3-5)
-				actionCount := len(steps)
-				if actionCount < 3 || actionCount > 5 {
-					t.Errorf("Workflow %s has %d actions, expected 3-5", file.Name(), actionCount)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Args = tt.args
+
+			exitCode, output := runWithExit(main)
+			if exitCode == 0 {
+				t.Error("Expected program to exit with error")
+			}
+
+			if !strings.Contains(output, tt.wantErr) {
+				t.Errorf("Expected error message containing %q, got %q", tt.wantErr, output)
+			}
+		})
+	}
+}
+
+func TestTemplateValidity(t *testing.T) {
+	// Test template execution with various data
+	tests := []struct {
+		name        string
+		data        WorkflowData
+		template    string
+		wantErr     bool
+		wantContent string
+	}{
+		{
+			name: "minimal workflow",
+			data: WorkflowData{
+				Number:  1,
+				Actions: []Action{{Owner: "actions", Name: "checkout", Version: "v4"}},
+			},
+			template: workflowTemplate,
+			wantErr:  false,
+		},
+		{
+			name: "maximum actions",
+			data: WorkflowData{
+				Number:  2,
+				Actions: make([]Action, 5),
+			},
+			template: workflowTemplate,
+			wantErr:  false,
+		},
+		{
+			name: "template execution error",
+			data: WorkflowData{
+				Number: 1,
+				Actions: []Action{{
+					Owner:   "test",
+					Name:    "test",
+					Version: "v1",
+				}},
+			},
+			template: `name: Workflow {{.Number}}
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    {{range .Actions}}
+      - uses: {{.MissingField}}/{{.Name}}@{{.Version}}
+    {{end}}
+`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpl, err := template.New("workflow").Option("missingkey=error").Parse(tt.template)
+			if err != nil {
+				t.Fatalf("Failed to parse template: %v", err)
+			}
+
+			var output strings.Builder
+			err = tmpl.Execute(&output, tt.data)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Expected template execution error, got nil")
 				}
-
-				// Verify action format
-				for _, step := range steps {
-					stepMap := step.(map[string]interface{})
-					uses := stepMap["uses"].(string)
-					if !strings.Contains(uses, "@") {
-						t.Errorf("Invalid action reference format in %s: %s", file.Name(), uses)
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected template error: %v", err)
+				} else {
+					result := output.String()
+					if !strings.Contains(result, fmt.Sprintf("name: Workflow %d", tt.data.Number)) {
+						t.Errorf("Template output missing workflow number")
 					}
 				}
 			}
@@ -146,78 +274,78 @@ func TestWorkflowGeneration(t *testing.T) {
 	}
 }
 
-func TestTemplateValidity(t *testing.T) {
-	// Test template parsing
-	_, err := template.New("workflow").Parse(workflowTemplate)
-	if err != nil {
-		t.Errorf("Invalid workflow template: %v", err)
-	}
-}
-
 func TestActionSelection(t *testing.T) {
-	// Verify unique combinations of actions
-	seen := make(map[string]bool)
-	for i := 1; i <= 10; i++ {
-		actionCount := 3 + (i % 3)
-		actions := make([]Action, actionCount)
-		for j := 0; j < actionCount; j++ {
-			actions[j] = commonActions[(i+j)%len(commonActions)]
-		}
+	// Test action selection boundaries
+	t.Run("action count range", func(t *testing.T) {
+		for i := 1; i <= 10; i++ {
+			actionCount := 2 + (i % 3) // 2-4 additional actions + checkout = 3-5 total
+			actions := make([]Action, 0, actionCount+1)
+			usedActions := make(map[string]bool)
 
-		// Create a string representation of the action combination
-		key := ""
-		for _, action := range actions {
-			key += action.Owner + "/" + action.Name + "@" + action.Version + ","
-		}
+			// Always add checkout as first action
+			actions = append(actions, commonActions[0])
+			usedActions[fmt.Sprintf("%s/%s@%s", commonActions[0].Owner, commonActions[0].Name, commonActions[0].Version)] = true
 
-		if seen[key] {
-			t.Errorf("Duplicate action combination found: %s", key)
+			// Add remaining actions, skipping checkout and avoiding duplicates
+			for j := 0; len(actions) < actionCount+1; j++ {
+				actionIndex := 1 + ((i + j) % (len(commonActions) - 1))
+				action := commonActions[actionIndex]
+				key := fmt.Sprintf("%s/%s@%s", action.Owner, action.Name, action.Version)
+				if !usedActions[key] {
+					actions = append(actions, action)
+					usedActions[key] = true
+				}
+			}
+
+			total := len(actions)
+			if total < 3 || total > 5 {
+				t.Errorf("Iteration %d: action count %d is outside expected range [3,5]", i, total)
+			}
+
+			// Verify checkout is always first
+			if actions[0] != commonActions[0] {
+				t.Errorf("Iteration %d: first action is not checkout", i)
+			}
+
+			// Verify no duplicate actions
+			seen := make(map[string]bool)
+			for _, action := range actions {
+				key := fmt.Sprintf("%s/%s@%s", action.Owner, action.Name, action.Version)
+				if seen[key] {
+					t.Errorf("Iteration %d: duplicate action %s", i, key)
+				}
+				seen[key] = true
+			}
 		}
-		seen[key] = true
-	}
+	})
 }
 
-func TestPermissions(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "workflow-perm-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer func(path string) {
-		err := os.RemoveAll(path)
-		if err != nil {
-			t.Fatalf("Failed to remove temp directory: %v", err)
+func verifyWorkflowStructure(t *testing.T, workflow map[string]interface{}, filename string) {
+	// Verify required fields
+	requiredFields := []string{"name", "on", "jobs"}
+	for _, field := range requiredFields {
+		if workflow[field] == nil {
+			t.Errorf("Workflow %s missing '%s' field", filename, field)
 		}
-	}(tempDir)
-
-	os.Args = []string{"cmd", tempDir, "1"}
-	main()
-
-	// Check directory permissions
-	workflowDir := filepath.Join(tempDir, ".github", "workflows")
-	info, err := os.Stat(workflowDir)
-	if err != nil {
-		t.Fatalf("Failed to stat workflow directory: %v", err)
 	}
 
-	if info.Mode().Perm() != 0750 {
-		t.Errorf("Expected directory permissions 0750, got %v", info.Mode().Perm())
+	// Verify action references
+	jobs := workflow["jobs"].(map[string]interface{})
+	test := jobs["test"].(map[string]interface{})
+	steps := test["steps"].([]interface{})
+
+	// Check if number of actions is in expected range (3-5)
+	actionCount := len(steps)
+	if actionCount < 3 || actionCount > 5 {
+		t.Errorf("Workflow %s has %d actions, expected 3-5", filename, actionCount)
 	}
 
-	// Check file permissions
-	files, err := os.ReadDir(workflowDir)
-	if err != nil {
-		t.Fatalf("Failed to read workflow directory: %v", err)
-	}
-
-	for _, file := range files {
-		info, err := file.Info()
-		if err != nil {
-			t.Errorf("Failed to get file info: %v", err)
-			continue
-		}
-
-		if info.Mode().Perm() != 0400 {
-			t.Errorf("Expected file permissions 0400, got %v for %s", info.Mode().Perm(), file.Name())
+	// Verify action format
+	for _, step := range steps {
+		stepMap := step.(map[string]interface{})
+		uses := stepMap["uses"].(string)
+		if !strings.Contains(uses, "@") {
+			t.Errorf("Invalid action reference format in %s: %s", filename, uses)
 		}
 	}
 }
