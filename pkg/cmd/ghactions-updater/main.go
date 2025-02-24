@@ -27,8 +27,8 @@ const (
 
 func validateFlags() error {
 	if *version {
-		fmt.Printf("ghactions-updater version %s (commit: %s)\n", Version, Commit)
-		os.Exit(0)
+		fmt.Printf("Version: %s\nCommit: %s\n", Version, Commit)
+		return nil
 	}
 
 	if *owner == "" {

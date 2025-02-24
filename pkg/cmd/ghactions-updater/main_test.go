@@ -638,6 +638,7 @@ jobs:
 			owner = flag.String("owner", "", "Repository owner")
 			repo = flag.String("repo-name", "", "Repository name")
 			token = flag.String("token", "", "GitHub token")
+			version = flag.Bool("version", false, "Print version information")
 
 			// Set up environment
 			os.Args = tt.args
@@ -835,6 +836,141 @@ jobs:
 			owner = flag.String("owner", "", "Repository owner")
 			repo = flag.String("repo-name", "", "Repository name")
 			token = flag.String("token", "", "GitHub token")
+
+			// Parse flags
+			if err := flag.CommandLine.Parse(tt.args[1:]); err != nil {
+				t.Fatalf("Failed to parse command line flags: %v", err)
+			}
+			err := validateFlags()
+			if tt.wantErr {
+				if err == nil {
+					t.Error("validateFlags() expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateFlags() unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestVersionChecker
+func TestVersionChecker(t *testing.T) {
+	checker := versionCheckerFactory(*token)
+	if checker == nil {
+		t.Error("versionCheckerFactory() returned nil")
+	}
+	absPath, err := absFunc(*repoPath)
+	if err != nil {
+		fmt.Printf("Expected fail to get absolute path: %v", err)
+	}
+
+	// Create update manager with repository root as base directory
+	manager := updater.NewUpdateManager(absPath)
+	if manager == nil {
+		t.Error("NewUpdateManager() returned nil")
+	}
+	// Create PR creator using factory
+	creator := prCreatorFactory(*token, *owner, *repo)
+	if creator == nil {
+		t.Error("prCreatorFactory() returned nil")
+	}
+}
+
+// TestValidateFlags
+func TestValidateFlags(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		envVars map[string]string
+		wantErr bool
+	}{
+		{
+			name: "valid flags",
+			args: []string{
+				"cmd",
+				"-owner=test-owner",
+				"-repo-name=test-repo",
+				"-token=test-token",
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing owner",
+			args: []string{
+				"cmd",
+				"-repo-name=test-repo",
+				"-token=test-token",
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing repo",
+			args: []string{
+				"cmd",
+				"-owner=test-owner",
+				"-token=test-token",
+			},
+			wantErr: true,
+		},
+		{
+			name: "token from env",
+			args: []string{
+				"cmd",
+				"-owner=test-owner",
+				"-repo-name=test-repo",
+			},
+			envVars: map[string]string{
+				"GITHUB_TOKEN": "test-token",
+			},
+			wantErr: false,
+		},
+		{
+			name: "version flag",
+			args: []string{
+				"cmd",
+				"-version=true",
+			},
+		},
+		{
+			name: "missing token",
+			args: []string{
+				"cmd",
+				"-owner=test-owner",
+				"-repo-name=test-repo",
+				"-token=''", // Empty token
+			},
+			envVars: map[string]string{
+				"GITHUB_TOKEN": "",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set up environment
+			os.Args = tt.args
+			for k, v := range tt.envVars {
+				err := os.Setenv(k, v)
+				if err != nil {
+					return
+				}
+				defer func(key string) {
+					err := os.Unsetenv(key)
+					if err != nil {
+						t.Fatalf("Failed to unset environment variable %s: %v", key, err)
+					}
+				}(k)
+			}
+
+			// Reset flags
+			flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+			repoPath = flag.String("repo", ".", "Path to the repository")
+			owner = flag.String("owner", "", "Repository owner")
+			repo = flag.String("repo-name", "", "Repository name")
+			token = flag.String("token", "", "GitHub token")
+			version = flag.Bool("version", false, "Print version information")
 
 			// Parse flags
 			if err := flag.CommandLine.Parse(tt.args[1:]); err != nil {
