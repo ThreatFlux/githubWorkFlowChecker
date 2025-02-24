@@ -35,7 +35,7 @@ DOCKER_IMAGE = $(DOCKER_REGISTRY)/$(BINARY_NAME)
 DOCKER_TAG ?= $(VERSION)
 DOCKER_LATEST = $(DOCKER_IMAGE):latest
 
-.PHONY: all build test lint clean docker-build check-versions install-tools security help version-info coverage docker-push docker-sign docker-verify install
+.PHONY: all build test lint clean docker-build check-versions install-tools security help version-info coverage docker-push docker-sign docker-verify install docker-run fmt docker-test
 
 # Version check targets
 check-versions: ## Check all required tool versions
@@ -62,6 +62,10 @@ build: check-versions ## Build the application
 	cd pkg/cmd/$(BINARY_NAME)/ && $(GO) build $(BUILD_FLAGS) \
 		-ldflags="-X main.Version=$(VERSION) -X main.Commit=$(COMMIT)" \
 		-o ../../../$(BINARY_PATH)
+
+fmt: ## Format Go source files
+	@echo "Formatting Go files..."
+	@find pkg -name "*.go" -type f -exec $(GO) fmt {} \;
 
 lint: install-tools ## Run golangci-lint for code analysis
 	@echo "Running linters..."
@@ -106,6 +110,12 @@ docker-sign: ## Sign Docker image with cosign
 	@$(COSIGN) sign --key cosign.key $(DOCKER_IMAGE):$(DOCKER_TAG)
 	@$(COSIGN) sign --key cosign.key $(DOCKER_LATEST)
 
+docker-test: ## Test Docker image with
+	@echo "Testing Docker image..."
+	@$(DOCKER) run \
+		--cap-drop=ALL \
+		-e GITHUB_TOKEN \
+		$(DOCKER_IMAGE):$(DOCKER_TAG) -h
 docker-verify: ## Verify Docker image signature
 	@echo "Verifying Docker image signature..."
 	@$(COSIGN) verify --key cosign.pub $(DOCKER_IMAGE):$(DOCKER_TAG)
@@ -113,8 +123,6 @@ docker-verify: ## Verify Docker image signature
 docker-run: ## Run Docker container with security options
 	@echo "Running Docker container with security options..."
 	@$(DOCKER) run \
-		--security-opt=no-new-privileges:true \
-		--security-opt=seccomp=seccomp.json \
 		--cap-drop=ALL \
 		-e GITHUB_TOKEN \
 		$(DOCKER_IMAGE):$(DOCKER_TAG)
@@ -142,7 +150,7 @@ clean: ## Remove build artifacts and generated files
 	@rm -rf dist/
 	@go clean -cache -testcache -modcache -fuzzcache
 
-all: test security lint build docker-build ## Run all checks and build
+all: fmt test security lint build docker-build ## Run all checks and build
 
 help: ## Display available commands
 	@echo "Available commands:"

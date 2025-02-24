@@ -28,7 +28,7 @@ const (
 func validateFlags() error {
 	if *version {
 		fmt.Printf("Version: %s\nCommit: %s\n", Version, Commit)
-		return nil
+		log.Printf("Version: %s\nCommit: %s\n", Version, Commit)
 	}
 
 	if *owner == "" {

@@ -932,6 +932,7 @@ func TestValidateFlags(t *testing.T) {
 				"cmd",
 				"-version=true",
 			},
+			wantErr: true,
 		},
 		{
 			name: "missing token",
