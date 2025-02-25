@@ -92,23 +92,11 @@ func ValidatePath(baseDir, path string, options PathValidationOptions) error {
 		return fmt.Errorf("path traversal attempt detected")
 	}
 
-	// Check file existence and type if needed
-	fileInfo, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			if !options.AllowNonExistent {
-				return fmt.Errorf("path does not exist: %s", path)
-			}
-		} else {
-			return fmt.Errorf("failed to access path: %w", err)
-		}
-	} else if options.RequireRegularFile && !fileInfo.Mode().IsRegular() {
-		return fmt.Errorf("not a regular file: %s", path)
-	}
-
-	// Check for symlinks that point outside the base directory
+	// Check if the path is a symlink first using Lstat (doesn't follow symlinks)
 	if options.CheckSymlinks {
-		if fileInfo != nil && fileInfo.Mode()&os.ModeSymlink != 0 {
+		lstatInfo, lstatErr := os.Lstat(path)
+		if lstatErr == nil && lstatInfo.Mode()&os.ModeSymlink != 0 {
+			// It's a symlink, evaluate it
 			evalPath, err := filepath.EvalSymlinks(path)
 			if err != nil {
 				return fmt.Errorf("failed to evaluate symlink: %w", err)
@@ -122,6 +110,20 @@ func ValidatePath(baseDir, path string, options PathValidationOptions) error {
 				return fmt.Errorf("symlink points outside allowed directory: %w", err)
 			}
 		}
+	}
+
+	// Check file existence and type if needed
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if !options.AllowNonExistent {
+				return fmt.Errorf("path does not exist: %s", path)
+			}
+		} else {
+			return fmt.Errorf("failed to access path: %w", err)
+		}
+	} else if options.RequireRegularFile && !fileInfo.Mode().IsRegular() {
+		return fmt.Errorf("not a regular file: %s", path)
 	}
 
 	return nil
