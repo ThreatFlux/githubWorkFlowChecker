@@ -181,7 +181,7 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 			if lineIdx >= 0 && lineIdx < len(lines) {
 				// Get the line and preserve indentation and structure
 				line := lines[update.LineNumber-1]
-				
+
 				// Extract indentation (whitespace at the beginning of the line)
 				indentation := ""
 				for i, c := range line {
@@ -190,26 +190,26 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 						break
 					}
 				}
-				
+
 				// Check if the line starts with "- name:" which indicates it's a step definition
 				isStepDefinition := strings.Contains(line, "- name:")
-				
+
 				// Apply the update with improved formatting
 				parts := strings.SplitN(line, "#", 2)
 				mainPart := strings.TrimSpace(parts[0])
-				
+
 				// Check if the line contains "uses:" to avoid duplication
 				usesIdx := strings.Index(mainPart, "uses:")
-				
+
 				// Format the action reference with the new hash
 				newRef := c.formatActionReference(update)
-				
+
 				var newLine string
-				
+
 				if usesIdx >= 0 {
 					// Case 1: Line contains "uses:" - preserve the format
 					beforeUses := mainPart[:usesIdx+5] // +5 to include "uses:"
-					
+
 					// Add version comment (already included in newRef)
 					newLine = fmt.Sprintf("%s%s %s", indentation, beforeUses, strings.TrimPrefix(newRef, "uses: "))
 				} else if isStepDefinition {
@@ -231,7 +231,7 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 						newLine = fmt.Sprintf("%s  %s", indentation, newRef)
 					}
 				}
-				
+
 				lines[lineIdx] = newLine
 			}
 		}

@@ -244,13 +244,8 @@ func TestParseActionReferenceErrors(t *testing.T) {
 			comments:   nil,
 			wantErrMsg: "invalid action reference format: actions/checkout@",
 		},
-		{
-			name:       "too many parts",
-			ref:        "actions/checkout/extra@v2",
-			path:       "workflow.yml",
-			comments:   nil,
-			wantErrMsg: "invalid action name format",
-		},
+		// Removed "too many parts" test case since we now support multi-part action names
+		// like github/codeql-action/init
 	}
 
 	for _, tt := range tests {
