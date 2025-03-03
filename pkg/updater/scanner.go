@@ -41,9 +41,14 @@ func parseActionReference(ref string, path string, comments []string) (*ActionRe
 	}
 
 	nameParts := strings.Split(parts[0], "/")
-	if len(nameParts) != 2 {
+	if len(nameParts) < 2 {
 		return nil, fmt.Errorf("invalid action name format: %s", parts[0])
 	}
+
+	// For actions with more than two parts (e.g., github/codeql-action/init)
+	// we'll consider the first part as the owner and join the rest as the name
+	owner := nameParts[0]
+	name := strings.Join(nameParts[1:], "/")
 
 	version := parts[1]
 	if version == "" {
@@ -68,8 +73,8 @@ func parseActionReference(ref string, path string, comments []string) (*ActionRe
 	}
 
 	return &ActionReference{
-		Owner:      nameParts[0],
-		Name:       nameParts[1],
+		Owner:      owner,
+		Name:       name,
 		Version:    version,
 		CommitHash: commitHash,
 		Path:       path,
@@ -290,7 +295,9 @@ func (s *Scanner) parseNode(node *yaml.Node, path string, actions *[]ActionRefer
 				action.Comments = comments
 
 				// Include line number in the key to handle same action used in different places
-				key := fmt.Sprintf("%s@%s:%d", action.Owner+"/"+action.Name, action.Version, lineNumber)
+				// Use the full action name (which may include multiple path segments)
+				actionFullName := action.Owner + "/" + action.Name
+				key := fmt.Sprintf("%s@%s:%d", actionFullName, action.Version, lineNumber)
 				if !seen[key] {
 					seen[key] = true
 					*actions = append(*actions, *action)
@@ -362,7 +369,9 @@ func (s *Scanner) parseAliasedNode(node *yaml.Node, aliasLine int, path string, 
 				action.Comments = comments
 
 				// Include line number in the key to handle same action used in different places
-				key := fmt.Sprintf("%s@%s:%d", action.Owner+"/"+action.Name, action.Version, aliasLine)
+				// Use the full action name (which may include multiple path segments)
+				actionFullName := action.Owner + "/" + action.Name
+				key := fmt.Sprintf("%s@%s:%d", actionFullName, action.Version, aliasLine)
 				if !seen[key] {
 					seen[key] = true
 					*actions = append(*actions, *action)

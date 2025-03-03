@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 )
@@ -74,7 +75,8 @@ func (m *DefaultUpdateManager) CreateUpdate(ctx context.Context, file string, ac
 		Comments:        comments,
 		VersionComment:  fmt.Sprintf("# %s", latestVersion),
 		OriginalVersion: originalVersion,
-		Description:     fmt.Sprintf("Update %s/%s from %s to %s", action.Owner, action.Name, originalVersion, latestVersion),
+		// Handle multi-part action names correctly (e.g., github/codeql-action/init)
+		Description: fmt.Sprintf("Update %s from %s to %s", action.Owner+"/"+action.Name, originalVersion, latestVersion),
 	}, nil
 }
 
@@ -144,34 +146,70 @@ func (m *DefaultUpdateManager) applyFileUpdates(fileN string, updates []*Update)
 				adjustedLineNumber, update.LineNumber, fileN)
 		}
 
-		// Get the line and preserve indentation
+		// Get the line and preserve indentation and structure
 		line := lines[adjustedLineNumber-1]
+
+		// Extract indentation (whitespace at the beginning of the line)
 		indentation := ""
-		if idx := strings.Index(line, "-"); idx >= 0 {
-			indentation = line[:idx]
+		for i, c := range line {
+			if !unicode.IsSpace(c) {
+				indentation = line[:i]
+				break
+			}
 		}
 
-		// Apply the update (same as before)
+		// Check if the line starts with "- name:" which indicates it's a step definition
+		isStepDefinition := strings.Contains(line, "- name:")
+
+		// Apply the update with improved formatting
 		parts := strings.SplitN(line, "#", 2)
 		mainPart := strings.TrimSpace(parts[0])
 
-		oldRefBase := fmt.Sprintf("%s/%s@", update.Action.Owner, update.Action.Name)
-		idx := strings.Index(mainPart, oldRefBase)
-		if idx >= 0 {
-			endIdx := strings.Index(mainPart[idx:], " ")
-			if endIdx == -1 {
-				endIdx = len(mainPart[idx:])
-			}
-			mainPart = mainPart[:idx] + oldRefBase + update.NewHash + mainPart[idx+endIdx:]
-		}
+		// Check if the line contains "uses:" to avoid duplication
+		usesIdx := strings.Index(mainPart, "uses:")
+
+		// Format the action reference with the new hash
+		actionFullName := update.Action.Owner + "/" + update.Action.Name
+		newActionRef := fmt.Sprintf("%s@%s", actionFullName, update.NewHash)
 
 		var newLine string
-		if update.VersionComment != "" {
-			newLine = fmt.Sprintf("%s%s  %s", indentation, strings.TrimSpace(mainPart),
-				update.VersionComment)
+
+		if usesIdx >= 0 {
+			// Case 1: Line contains "uses:" - preserve the format
+			beforeUses := mainPart[:usesIdx+5] // +5 to include "uses:"
+
+			// Add version comment
+			if update.VersionComment != "" {
+				newLine = fmt.Sprintf("%s%s %s  %s", indentation, beforeUses, newActionRef, update.VersionComment)
+			} else {
+				newLine = fmt.Sprintf("%s%s %s  # %s", indentation, beforeUses, newActionRef, update.NewVersion)
+			}
+		} else if isStepDefinition {
+			// Case 2: This is a step definition line, the "uses:" line will be on the next line
+			// Just keep it as is
+			newLine = line
 		} else {
-			newLine = fmt.Sprintf("%s%s  # %s", indentation, strings.TrimSpace(mainPart),
-				update.NewVersion)
+			// Case 3: This is a line that should have "uses:" but doesn't (possibly already processed incorrectly)
+			// Add proper indentation and "uses:" prefix
+			// Check if this is a step line (should start with "- " or "  - ")
+			if strings.Contains(line, "- name:") {
+				// This is a step definition line, keep it as is
+				newLine = line
+			} else if strings.HasPrefix(strings.TrimSpace(line), "-") {
+				// This is a step line but not a name line, it should have proper indentation
+				if update.VersionComment != "" {
+					newLine = fmt.Sprintf("%s      uses: %s  %s", indentation, newActionRef, update.VersionComment)
+				} else {
+					newLine = fmt.Sprintf("%s      uses: %s  # %s", indentation, newActionRef, update.NewVersion)
+				}
+			} else {
+				// This is some other line, add standard indentation
+				if update.VersionComment != "" {
+					newLine = fmt.Sprintf("%s  uses: %s  %s", indentation, newActionRef, update.VersionComment)
+				} else {
+					newLine = fmt.Sprintf("%s  uses: %s  # %s", indentation, newActionRef, update.NewVersion)
+				}
+			}
 		}
 
 		// Update the lines array

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 	"github.com/google/go-github/v58/github"
@@ -13,9 +14,10 @@ import (
 
 // DefaultPRCreator implements the PRCreator interface
 type DefaultPRCreator struct {
-	client *github.Client
-	owner  string
-	repo   string
+	client        *github.Client
+	owner         string
+	repo          string
+	workflowsPath string // Path to workflow files (relative to repository root)
 }
 
 // NewPRCreator creates a new instance of DefaultPRCreator
@@ -23,10 +25,33 @@ func NewPRCreator(token, owner, repo string) *DefaultPRCreator {
 	client := common.NewGitHubClientWithToken(token)
 
 	return &DefaultPRCreator{
-		client: client,
-		owner:  owner,
-		repo:   repo,
+		client:        client,
+		owner:         owner,
+		repo:          repo,
+		workflowsPath: ".github/workflows", // Default path
 	}
+}
+
+// SetWorkflowsPath sets the path to workflow files
+func (c *DefaultPRCreator) SetWorkflowsPath(path string) {
+	c.workflowsPath = path
+}
+
+// formatRelativePath converts an absolute file path to a repository-relative path
+func (c *DefaultPRCreator) formatRelativePath(file string) string {
+	relPath := file
+	if filepath.IsAbs(relPath) {
+		// Extract the workflows path part of the path
+		parts := strings.Split(relPath, c.workflowsPath)
+		if len(parts) != 2 {
+			// If we can't find the workflows path, just use the file name
+			relPath = filepath.Base(file)
+		} else {
+			// Join the workflows path with the file path
+			relPath = filepath.Join(c.workflowsPath, strings.TrimPrefix(parts[1], "/"))
+		}
+	}
+	return relPath
 }
 
 // CreatePR creates a pull request with the given updates
@@ -103,7 +128,9 @@ func (c *DefaultPRCreator) formatActionReference(update *Update) string {
 	var sb strings.Builder
 
 	// Add the action reference with hash
-	sb.WriteString(fmt.Sprintf("uses: %s/%s@%s", update.Action.Owner, update.Action.Name, update.NewHash))
+	// Handle multi-part action names correctly (e.g., github/codeql-action/init)
+	actionFullName := update.Action.Owner + "/" + update.Action.Name
+	sb.WriteString(fmt.Sprintf("%s@%s", actionFullName, update.NewHash))
 
 	// Add current version comment
 	if update.NewVersion != "" {
@@ -125,15 +152,7 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 	var entries []*github.TreeEntry
 	for file, fileUpdates := range fileUpdates {
 		// Convert absolute path to repository-relative path
-		relPath := file
-		if filepath.IsAbs(relPath) {
-			// Extract the .github/workflows part of the path
-			parts := strings.Split(relPath, ".github/workflows")
-			if len(parts) != 2 {
-				return fmt.Errorf("invalid workflow file path: %s", file)
-			}
-			relPath = filepath.Join(".github/workflows", strings.TrimPrefix(parts[1], "/"))
-		}
+		relPath := c.formatRelativePath(file)
 
 		// Get current file content
 		content, _, _, err := c.client.Repositories.GetContents(ctx, c.owner, c.repo, relPath,
@@ -160,11 +179,60 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 			// Find the line with the action reference
 			lineIdx := update.LineNumber - 1
 			if lineIdx >= 0 && lineIdx < len(lines) {
-				// Format the new reference with comments
+				// Get the line and preserve indentation and structure
+				line := lines[update.LineNumber-1]
+
+				// Extract indentation (whitespace at the beginning of the line)
+				indentation := ""
+				for i, c := range line {
+					if !unicode.IsSpace(c) {
+						indentation = line[:i]
+						break
+					}
+				}
+
+				// Check if the line starts with "- name:" which indicates it's a step definition
+				isStepDefinition := strings.Contains(line, "- name:")
+
+				// Apply the update with improved formatting
+				parts := strings.SplitN(line, "#", 2)
+				mainPart := strings.TrimSpace(parts[0])
+
+				// Check if the line contains "uses:" to avoid duplication
+				usesIdx := strings.Index(mainPart, "uses:")
+
+				// Format the action reference with the new hash
 				newRef := c.formatActionReference(update)
-				// Preserve old line format before the replacement uses
-				newRef = strings.Split(lines[update.LineNumber-1], "uses")[0] + newRef
-				lines[lineIdx] = newRef
+
+				var newLine string
+
+				if usesIdx >= 0 {
+					// Case 1: Line contains "uses:" - preserve the format
+					beforeUses := mainPart[:usesIdx+5] // +5 to include "uses:"
+
+					// Add version comment (already included in newRef)
+					newLine = fmt.Sprintf("%s%s %s", indentation, beforeUses, strings.TrimPrefix(newRef, "uses: "))
+				} else if isStepDefinition {
+					// Case 2: This is a step definition line, the "uses:" line will be on the next line
+					// Just keep it as is
+					newLine = line
+				} else {
+					// Case 3: This is a line that should have "uses:" but doesn't (possibly already processed incorrectly)
+					// Add proper indentation and "uses:" prefix
+					// Check if this is a step line (should start with "- " or "  - ")
+					if strings.Contains(line, "- name:") {
+						// This is a step definition line, keep it as is
+						newLine = line
+					} else if strings.HasPrefix(strings.TrimSpace(line), "-") {
+						// This is a step line but not a name line, it should have proper indentation
+						newLine = fmt.Sprintf("%s      uses: %s", indentation, strings.TrimPrefix(newRef, "uses: "))
+					} else {
+						// This is some other line, add standard indentation
+						newLine = fmt.Sprintf("%s  %s", indentation, newRef)
+					}
+				}
+
+				lines[lineIdx] = newLine
 			}
 		}
 		fileContent = strings.Join(lines, "\n")
@@ -233,7 +301,9 @@ func (c *DefaultPRCreator) generatePRBody(updates []*Update) string {
 	sb.WriteString("This PR updates the following GitHub Actions to their latest versions:\n\n")
 
 	for _, update := range updates {
-		sb.WriteString(fmt.Sprintf("* `%s/%s`\n", update.Action.Owner, update.Action.Name))
+		// Handle multi-part action names correctly (e.g., github/codeql-action/init)
+		actionFullName := update.Action.Owner + "/" + update.Action.Name
+		sb.WriteString(fmt.Sprintf("* `%s`\n", actionFullName))
 		sb.WriteString(fmt.Sprintf("  * From: %s (%s)\n", update.OldVersion, update.OldHash))
 		sb.WriteString(fmt.Sprintf("  * To: %s (%s)\n", update.NewVersion, update.NewHash))
 		if update.OriginalVersion != "" && update.OriginalVersion != update.OldVersion {

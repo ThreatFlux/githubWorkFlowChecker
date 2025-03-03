@@ -52,6 +52,7 @@ func TestRun(t *testing.T) {
 		additionalWorkflows map[string]string
 		versionChecker      *mockVersionChecker
 		prCreator           *mockPRCreator
+		flags               map[string]string
 		wantErr             bool
 	}{
 		{
@@ -296,6 +297,81 @@ jobs:
 			},
 			wantErr: false, // Should log errors and continue
 		},
+		{
+			name: "custom workflows path",
+			workflowContent: `name: Test Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2`,
+			versionChecker: &mockVersionChecker{
+				latestVersion: "v3",
+				latestHash:    "abc123def456",
+				err:           nil,
+			},
+			prCreator: &mockPRCreator{
+				err: nil,
+			},
+			flags: map[string]string{
+				"workflows-path": "custom/workflows",
+			},
+			wantErr: false, // Should not error, but won't find any workflows in the custom path
+			additionalWorkflows: map[string]string{
+				"custom_workflow.yml": `name: Custom Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2`,
+			},
+		},
+		{
+			name: "dry run mode",
+			workflowContent: `name: Test Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2`,
+			versionChecker: &mockVersionChecker{
+				latestVersion: "v3",
+				latestHash:    "abc123def456",
+				err:           nil,
+			},
+			prCreator: &mockPRCreator{
+				err: nil,
+			},
+			flags: map[string]string{
+				"dry-run": "true",
+			},
+			wantErr: false, // Should not error, just print changes
+		},
+		{
+			name: "stage mode",
+			workflowContent: `name: Test Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2`,
+			versionChecker: &mockVersionChecker{
+				latestVersion: "v3",
+				latestHash:    "abc123def456",
+				err:           nil,
+			},
+			prCreator: &mockPRCreator{
+				err: nil,
+			},
+			flags: map[string]string{
+				"stage": "true",
+			},
+			wantErr: false, // Should not error, apply changes locally
+		},
 	}
 
 	for _, tt := range tests {
@@ -322,6 +398,19 @@ jobs:
 			if tt.workflowContent != "" {
 				if err := os.WriteFile(filepath.Join(workflowsDir, "test.yml"), []byte(tt.workflowContent), 0644); err != nil {
 					t.Fatalf("Failed to create test workflow file: %v", err)
+				}
+			}
+
+			// Create custom workflows directory if needed
+			if tt.flags != nil && tt.flags["workflows-path"] != "" {
+				customDir := filepath.Join(tempDir, tt.flags["workflows-path"])
+				if err := os.MkdirAll(customDir, 0755); err != nil {
+					t.Fatalf("Failed to create custom workflows dir: %v", err)
+				}
+
+				// Create a test file in the custom directory
+				if err := os.WriteFile(filepath.Join(customDir, "custom.yml"), []byte(tt.workflowContent), 0644); err != nil {
+					t.Fatalf("Failed to create custom workflow file: %v", err)
 				}
 			}
 
@@ -372,8 +461,16 @@ jobs:
 			owner = flag.String("owner", "", "Repository owner")
 			repo = flag.String("repo-name", "", "Repository name")
 			token = flag.String("token", "", "GitHub token")
+			workflowsPath = flag.String("workflows-path", ".github/workflows", "Path to workflow files")
+			dryRun = flag.Bool("dry-run", false, "Show changes without applying them")
+			stage = flag.Bool("stage", false, "Apply changes locally without creating a PR")
 
-			os.Args = []string{"cmd", "-owner=test-owner", "-repo-name=test-repo", "-token=test-token"}
+			// Build command line args
+			args := []string{"cmd", "-owner=test-owner", "-repo-name=test-repo", "-token=test-token"}
+			for k, v := range tt.flags {
+				args = append(args, fmt.Sprintf("-%s=%s", k, v))
+			}
+			os.Args = args
 			if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
 				t.Fatalf("Failed to parse command line flags: %v", err)
 			}
@@ -455,6 +552,9 @@ jobs:
 	owner = flag.String("owner", "test-owner", "Repository owner")
 	repo = flag.String("repo-name", "test-repo", "Repository name")
 	token = flag.String("token", "test-token", "GitHub token")
+	workflowsPath = flag.String("workflows-path", ".github/workflows", "Path to workflow files")
+	dryRun = flag.Bool("dry-run", false, "Show changes without applying them")
+	stage = flag.Bool("stage", false, "Apply changes locally without creating a PR")
 
 	if err := flag.CommandLine.Parse([]string{}); err != nil {
 		t.Fatalf("Failed to parse command line flags: %v", err)
@@ -639,6 +739,9 @@ jobs:
 			repo = flag.String("repo-name", "", "Repository name")
 			token = flag.String("token", "", "GitHub token")
 			version = flag.Bool("version", false, "Print version information")
+			workflowsPath = flag.String("workflows-path", ".github/workflows", "Path to workflow files")
+			dryRun = flag.Bool("dry-run", false, "Show changes without applying them")
+			stage = flag.Bool("stage", false, "Apply changes locally without creating a PR")
 
 			// Set up environment
 			os.Args = tt.args
@@ -836,6 +939,9 @@ jobs:
 			owner = flag.String("owner", "", "Repository owner")
 			repo = flag.String("repo-name", "", "Repository name")
 			token = flag.String("token", "", "GitHub token")
+			workflowsPath = flag.String("workflows-path", ".github/workflows", "Path to workflow files")
+			dryRun = flag.Bool("dry-run", false, "Show changes without applying them")
+			stage = flag.Bool("stage", false, "Apply changes locally without creating a PR")
 
 			// Parse flags
 			if err := flag.CommandLine.Parse(tt.args[1:]); err != nil {
@@ -850,6 +956,72 @@ jobs:
 				if err != nil {
 					t.Errorf("validateFlags() unexpected error: %v", err)
 				}
+			}
+		})
+	}
+}
+
+// TestCountUniqueFiles tests the countUniqueFiles function
+func TestCountUniqueFiles(t *testing.T) {
+	tests := []struct {
+		name     string
+		updates  []*updater.Update
+		expected int
+	}{
+		{
+			name:     "empty updates",
+			updates:  []*updater.Update{},
+			expected: 0,
+		},
+		{
+			name: "single file",
+			updates: []*updater.Update{
+				{
+					FilePath: "file1.yml",
+				},
+			},
+			expected: 1,
+		},
+		{
+			name: "multiple files with duplicates",
+			updates: []*updater.Update{
+				{
+					FilePath: "file1.yml",
+				},
+				{
+					FilePath: "file2.yml",
+				},
+				{
+					FilePath: "file1.yml", // Duplicate
+				},
+				{
+					FilePath: "file3.yml",
+				},
+			},
+			expected: 3,
+		},
+		{
+			name: "all duplicates",
+			updates: []*updater.Update{
+				{
+					FilePath: "file1.yml",
+				},
+				{
+					FilePath: "file1.yml",
+				},
+				{
+					FilePath: "file1.yml",
+				},
+			},
+			expected: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := countUniqueFiles(tt.updates)
+			if result != tt.expected {
+				t.Errorf("countUniqueFiles() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
@@ -946,6 +1118,64 @@ func TestValidateFlags(t *testing.T) {
 				"GITHUB_TOKEN": "",
 			},
 		},
+		{
+			name: "custom workflows path",
+			args: []string{
+				"cmd",
+				"-owner=test-owner",
+				"-repo-name=test-repo",
+				"-token=test-token",
+				"-workflows-path=custom/workflows",
+			},
+			wantErr: false,
+		},
+		{
+			name: "workflows path from env",
+			args: []string{
+				"cmd",
+				"-owner=test-owner",
+				"-repo-name=test-repo",
+				"-token=test-token",
+			},
+			envVars: map[string]string{
+				"WORKFLOWS_PATH": "custom/workflows",
+			},
+			wantErr: false,
+		},
+		{
+			name: "dry run mode",
+			args: []string{
+				"cmd",
+				"-owner=test-owner",
+				"-repo-name=test-repo",
+				"-token=test-token",
+				"-dry-run",
+			},
+			wantErr: false,
+		},
+		{
+			name: "stage mode",
+			args: []string{
+				"cmd",
+				"-owner=test-owner",
+				"-repo-name=test-repo",
+				"-token=test-token",
+				"-stage",
+			},
+			wantErr: false,
+		},
+		{
+			name: "dry run and stage both set",
+			args: []string{
+				"cmd",
+				"-owner=test-owner",
+				"-repo-name=test-repo",
+				"-token=test-token",
+				"-dry-run",
+				"-stage",
+			},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -972,6 +1202,9 @@ func TestValidateFlags(t *testing.T) {
 			repo = flag.String("repo-name", "", "Repository name")
 			token = flag.String("token", "", "GitHub token")
 			version = flag.Bool("version", false, "Print version information")
+			workflowsPath = flag.String("workflows-path", ".github/workflows", "Path to workflow files")
+			dryRun = flag.Bool("dry-run", false, "Show changes without applying them")
+			stage = flag.Bool("stage", false, "Apply changes locally without creating a PR")
 
 			// Parse flags
 			if err := flag.CommandLine.Parse(tt.args[1:]); err != nil {
