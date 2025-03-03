@@ -41,6 +41,17 @@ on:
   schedule:
     - cron: "0 0 * * 1"  # Runs every Monday
   workflow_dispatch:      # Manual trigger option
+    inputs:
+      dry-run:
+        description: 'Show changes without applying them'
+        required: false
+        default: 'false'
+        type: boolean
+      workflows-path:
+        description: 'Path to workflow files'
+        required: false
+        default: '.github/workflows'
+        type: string
 
 jobs:
   update-actions:
@@ -58,6 +69,10 @@ jobs:
           owner: ${{ github.repository_owner }}
           repo-name: ${{ github.event.repository.name }}
           labels: "dependencies,security"
+          # Optional parameters
+          workflows-path: ${{ inputs.workflows-path }}
+          dry-run: ${{ inputs.dry-run }}
+          # stage: 'false'  # Uncomment to apply changes locally without creating a PR
 ```
 
 ### CLI Installation
@@ -86,6 +101,9 @@ ghactions-updater [options]
 | `-owner` | Repository owner | ✅ | - |
 | `-repo-name` | Repository name | ✅ | - |
 | `-repo` | Repository path | ❌ | "." |
+| `-workflows-path` | Path to workflow files | ❌ | ".github/workflows" |
+| `-dry-run` | Show changes without applying them | ❌ | false |
+| `-stage` | Apply changes locally without creating PR | ❌ | false |
 | `-version` | Print version information | ❌ | - |
 
 ### Environment Variables
@@ -93,6 +111,7 @@ ghactions-updater [options]
 - `GITHUB_TOKEN`: Alternative to `-token` flag
 - `OWNER`: Alternative to `-owner` flag
 - `REPO_NAME`: Alternative to `-repo-name` flag
+- `WORKFLOWS_PATH`: Alternative to `-workflows-path` flag
 
 ## 🛠️ Development
 

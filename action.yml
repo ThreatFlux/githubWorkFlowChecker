@@ -19,6 +19,18 @@ inputs:
     description: 'Path to the repository (defaults to current directory)'
     required: false
     default: '.'
+  workflows-path:
+    description: 'Path to workflow files (relative to repository root)'
+    required: false
+    default: '.github/workflows'
+  dry-run:
+    description: 'Show changes without applying them'
+    required: false
+    default: 'false'
+  stage:
+    description: 'Apply changes locally without creating a PR'
+    required: false
+    default: 'false'
   schedule:
     description: 'Cron schedule for automated updates (e.g., "0 0 * * 1" for weekly)'
     required: false
@@ -44,6 +56,10 @@ runs:
     - ${{ inputs.repo-name }}
     - '-repo'
     - ${{ inputs.repo }}
+    - '-workflows-path'
+    - ${{ inputs.workflows-path }}
+    - ${{ inputs.dry-run == 'true' && '-dry-run' || '' }}
+    - ${{ inputs.stage == 'true' && '-stage' || '' }}
 
 # Example workflow usage:
 #
