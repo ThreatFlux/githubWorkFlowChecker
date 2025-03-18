@@ -1,5 +1,5 @@
 # Required versions
-REQUIRED_GO_VERSION = 1.24.0
+REQUIRED_GO_VERSION = 1.24.1
 REQUIRED_DOCKER_VERSION = 24.0.0
 
 # Tool paths and versions
@@ -34,8 +34,9 @@ DOCKER_REGISTRY ?= threatflux
 DOCKER_IMAGE = $(DOCKER_REGISTRY)/$(BINARY_NAME)
 DOCKER_TAG ?= $(VERSION)
 DOCKER_LATEST = $(DOCKER_IMAGE):latest
+DOCKER_DEV_IMAGE = $(DOCKER_REGISTRY)/go-dev
 
-.PHONY: all build test lint clean docker-build check-versions install-tools security help version-info coverage docker-push docker-sign docker-verify install docker-run fmt docker-test
+.PHONY: all build test lint clean docker-build check-versions install-tools security help version-info coverage docker-push docker-sign docker-verify install docker-run fmt docker-test docker-tests docker-dev-build docker-fmt docker-lint docker-security docker-coverage docker-all docker-shell
 
 # Version check targets
 check-versions: ## Check all required tool versions
@@ -43,7 +44,7 @@ check-versions: ## Check all required tool versions
 	@echo "Checking Go version..."
 	@$(GO) version | grep -q "go$(REQUIRED_GO_VERSION)" || (echo "Error: Required Go version $(REQUIRED_GO_VERSION) not found" && exit 1)
 	@echo "Checking Docker version..."
-	@$(DOCKER) --version | grep -q "$(REQUIRED_DOCKER_VERSION)" || (echo "Warning: Recommended Docker version $(REQUIRED_DOCKER_VERSION) not found")
+@$(DOCKER) --version | grep -q "$(REQUIRED_DOCKER_VERSION)" || (echo "Warning: Recommended Docker version $(REQUIRED_DOCKER_VERSION) not found")
 	@echo "All version checks completed"
 
 # Install required tools
@@ -116,6 +117,7 @@ docker-test: ## Test Docker image with
 		--cap-drop=ALL \
 		-e GITHUB_TOKEN \
 		$(DOCKER_IMAGE):$(DOCKER_TAG) -h
+
 docker-verify: ## Verify Docker image signature
 	@echo "Verifying Docker image signature..."
 	@$(COSIGN) verify --key cosign.pub $(DOCKER_IMAGE):$(DOCKER_TAG)
@@ -167,3 +169,36 @@ version-info: ## Display version information
 	@echo "\nInstalled Versions:"
 	@$(GO) version
 	@$(DOCKER) --version
+
+# Docker development environment targets
+docker-dev-build: ## Build the development Docker image
+	@echo "Building development Docker image..."
+	@$(DOCKER) build -t $(DOCKER_DEV_IMAGE) -f Dockerfile.dev .
+
+docker-fmt: docker-dev-build ## Format Go source files using Docker
+	@echo "Formatting Go files using Docker..."
+	@$(DOCKER) run -v $(CURDIR):/workspace $(DOCKER_DEV_IMAGE) fmt
+
+docker-lint: docker-dev-build ## Run golangci-lint for code analysis using Docker
+	@echo "Running linters using Docker..."
+	@$(DOCKER) run -v $(CURDIR):/workspace $(DOCKER_DEV_IMAGE) lint
+
+docker-security: docker-dev-build ## Run security scans using Docker
+	@echo "Running security scans using Docker..."
+	@$(DOCKER) run -v $(CURDIR):/workspace $(DOCKER_DEV_IMAGE) security
+
+docker-tests: docker-dev-build ## Run unit tests with coverage using Docker
+	@echo "Running tests using Docker..."
+	@$(DOCKER) run -v $(CURDIR):/workspace -e GITHUB_TOKEN=$(GITHUB_TOKEN) $(DOCKER_DEV_IMAGE) test
+
+docker-coverage: docker-dev-build ## Generate test coverage report using Docker
+	@echo "Generating coverage report using Docker..."
+	@$(DOCKER) run -v $(CURDIR):/workspace -e GITHUB_TOKEN=$(GITHUB_TOKEN) $(DOCKER_DEV_IMAGE) coverage
+
+docker-all: docker-dev-build ## Run all checks and tests using Docker
+	@echo "Running all checks and tests using Docker..."
+	@$(DOCKER) run -v $(CURDIR):/workspace -e GITHUB_TOKEN=$(GITHUB_TOKEN) $(DOCKER_DEV_IMAGE) all
+
+docker-shell: docker-dev-build ## Start a shell in the development container
+	@echo "Starting shell in development container..."
+	@$(DOCKER) run -it -v $(CURDIR):/workspace $(DOCKER_DEV_IMAGE) shell
