@@ -20,11 +20,8 @@ RUN apk add --no-cache \
     && mkdir -p /go/pkg/mod /go/src \
     && addgroup -g ${UID} ${USER} \
     && adduser -D -u ${UID} -G ${USER} ${USER} \
-    && chown -R ${USER}:${USER} /go
-
-# Install required Go tools
-# Using specific versions that are known to exist in the repositories
-RUN go install github.com/securego/gosec/v2/cmd/gosec@latest && \
+    && chown -R ${USER}:${USER} /go \
+    && go install github.com/securego/gosec/v2/cmd/gosec@latest && \
     go install golang.org/x/vuln/cmd/govulncheck@latest && \
     go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest && \
     go install github.com/sonatype-nexus-community/nancy@latest && \
