@@ -1,0 +1,57 @@
+# syntax=docker/dockerfile:1.4
+
+# Development image with all required tools for Go development
+FROM golang:1.24.1-alpine3.21
+# Build arguments
+ARG USER=goapp
+ARG UID=10001
+
+# Install development dependencies with pinned versions for security
+RUN apk add --no-cache \
+    git=2.47.2-r0 \
+    ca-certificates=20241121-r1 \
+    cosign=2.4.1-r2 \
+    bash=5.2.37-r0 \
+    curl=8.12.1-r0 \
+    tzdata=2025a-r0 \
+    make=4.4.1-r2 \
+    && mkdir -p /go/pkg/mod /go/src \
+    && addgroup -g ${UID} ${USER} \
+    && adduser -D -u ${UID} -G ${USER} ${USER} \
+    && chown -R ${USER}:${USER} /go
+
+# Install required Go tools
+RUN go install github.com/securego/gosec/v2/cmd/gosec@latest && \
+    go install golang.org/x/vuln/cmd/govulncheck@latest && \
+    go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest && \
+    go install github.com/sonatype-nexus-community/nancy@latest && \
+    go install github.com/sigstore/cosign/cmd/cosign@latest && \
+    go install github.com/anchore/syft/cmd/syft@latest
+
+# Set environment variables
+ENV CGO_ENABLED=0 \
+    GO111MODULE=on \
+    PATH="${PATH}:/go/bin"
+
+# Create a workspace directory for mounting local projects
+WORKDIR /workspace
+
+# Copy the entrypoint script
+COPY dev-entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Switch to non-root user for security
+USER ${USER}
+
+# Label with metadata
+LABEL org.opencontainers.image.authors="wyattroersma@gmail.com" \
+      org.opencontainers.image.url="https://github.com/ThreatFlux/go-builder" \
+      org.opencontainers.image.source="https://github.com/ThreatFlux/go-builder" \
+      org.opencontainers.image.vendor="ThreatFlux" \
+      org.opencontainers.image.title="go-dev" \
+      org.opencontainers.image.description="ThreatFlux Go Development Environment Container"
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+# Default command to show help
+CMD ["help"]
