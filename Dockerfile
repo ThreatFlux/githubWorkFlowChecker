@@ -18,10 +18,11 @@ ENV CGO_ENABLED=0 \
 WORKDIR /app
 
 # Install required packages with versions pinned
+# Package names sorted alphanumerically
 RUN apk add --no-cache --virtual .build-deps \
-    git=2.47.2-r0 \
     ca-certificates=20241121-r1 \
     cosign=2.4.1-r3 \
+    git=2.47.2-r0 \
     && addgroup -g ${UID} ${USER} \
     && adduser -D -u ${UID} -G ${USER} ${USER} \
     && mkdir -p /go/pkg/mod /go/src \
@@ -61,9 +62,10 @@ ENV APP_USER=${USER} \
     APP_UID=${UID}
 
 # Install runtime dependencies and setup user with a single RUN command to reduce layers
+# Package names sorted alphanumerically for better maintainability
 RUN apk add --no-cache \
-    ca-certificates=20241121-r1 \
     bash=5.2.37-r0 \
+    ca-certificates=20241121-r1 \
     tzdata=2025a-r0 \
     && addgroup -g ${UID} ${USER} \
     && adduser -D -u ${UID} -G ${USER} ${USER} \
@@ -107,9 +109,10 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
       com.threatflux.image.created.timestamp="${BUILD_DATE}" \
       com.threatflux.sbom.path="/app/sbom.json"
 
-# Set the entrypoint
+# Set the entrypoint with exec form (already using best practice)
 ENTRYPOINT ["/app/entrypoint.sh"]
 
 # Improved health check with reasonable intervals and better process checking
+# Using exec form rather than shell form for better reliability
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ps -ef | grep -v grep | grep ghactions-updater || exit 1
+    CMD ["sh", "-c", "ps -ef | grep -v grep | grep ghactions-updater || exit 1"]
