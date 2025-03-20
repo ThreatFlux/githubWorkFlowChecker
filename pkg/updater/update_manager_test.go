@@ -29,7 +29,12 @@ func TestValidatePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	// Create a test file
 	testFile := filepath.Join(tempDir, "test.yml")
@@ -54,7 +59,12 @@ func TestValidatePath(t *testing.T) {
 	if err := os.WriteFile(outsideFile, []byte("outside"), 0600); err != nil {
 		t.Fatalf("Failed to create outside file: %v", err)
 	}
-	defer os.Remove(outsideFile)
+	defer func(name string) {
+		err := os.Remove(name)
+		if err != nil {
+			t.Fatalf("Failed to remove outside file: %v", err)
+		}
+	}(outsideFile)
 
 	manager := NewUpdateManager(tempDir)
 
@@ -248,7 +258,12 @@ func TestApplyUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	// Create a test workflow file
 	workflowContent := `name: Test Workflow

@@ -14,7 +14,12 @@ func TestParseAliasedNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	// Set secure permissions on temp directory
 	if err := os.Chmod(tempDir, 0750); err != nil {
@@ -220,7 +225,12 @@ func TestParseAliasedNodeWithComments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	// Set secure permissions on temp directory
 	if err := os.Chmod(tempDir, 0750); err != nil {
@@ -284,7 +294,12 @@ func TestParseAliasedNodeEdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	// Set secure permissions on temp directory
 	if err := os.Chmod(tempDir, 0750); err != nil {

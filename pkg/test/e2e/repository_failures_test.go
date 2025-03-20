@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/updater"
 	"github.com/google/go-github/v58/github"
 	"golang.org/x/oauth2"
@@ -40,7 +41,7 @@ func TestRepositoryFailures(t *testing.T) {
 				})
 
 				if err == nil {
-					t.Error("Expected error with invalid token, got nil")
+					t.Errorf(common.ErrExpectedError, "authentication error")
 				}
 			},
 		},
@@ -59,7 +60,7 @@ func TestRepositoryFailures(t *testing.T) {
 				})
 
 				if err == nil {
-					t.Error("Expected error with invalid repository name, got nil")
+					t.Errorf(common.ErrExpectedError, "invalid repository name")
 				}
 			},
 		},
@@ -75,12 +76,12 @@ func TestRepositoryFailures(t *testing.T) {
 				repoPath := filepath.Join(env.workDir, nonExistentRepo)
 
 				if err := os.MkdirAll(repoPath, 0750); err != nil {
-					t.Fatalf("Failed to create repo directory: %v", err)
+					t.Fatalf(common.ErrFailedToCreateRepoDir, err)
 				}
 
 				err := env.cloneWithError(cloneURL, repoPath)
 				if err == nil {
-					t.Error("Expected error when cloning non-existent repository, got nil")
+					t.Errorf(common.ErrExpectedError, "repository not found")
 				}
 			},
 		},
@@ -96,24 +97,24 @@ func TestRepositoryFailures(t *testing.T) {
 				// Make workflows directory read-only with no write permissions
 				workflowDir := filepath.Join(repoPath, ".github", "workflows")
 				if err := os.MkdirAll(workflowDir, 0750); err != nil {
-					t.Fatalf("Failed to create workflows directory: %v", err)
+					t.Fatalf(common.ErrFailedToCreateWorkflowsDir, err)
 				}
 				if err := os.Chmod(workflowDir, 0555); err != nil {
-					t.Fatalf("Failed to make directory read-only: %v", err)
+					t.Fatalf(common.ErrFailedToChangePermissions, err)
 				}
 
 				// Attempt to create workflow file in read-only directory
 				workflowFile := filepath.Join(workflowDir, "test-failure.yml")
 				err := os.WriteFile(workflowFile, []byte("invalid: workflow: content"), 0600)
 				if err == nil {
-					t.Error("Expected error when writing to read-only directory, got nil")
+					t.Errorf(common.ErrExpectedError, "permission denied")
 				} else if !os.IsPermission(err) {
-					t.Errorf("Expected permission denied error, got: %v", err)
+					t.Errorf(common.ErrUnexpectedError, err)
 				}
 
 				// Restore permissions for cleanup
 				if err := os.Chmod(workflowDir, 0750); err != nil {
-					t.Fatalf("Failed to restore directory permissions: %v", err)
+					t.Fatalf(common.ErrFailedToRestorePermissions, err)
 				}
 			},
 		},
@@ -129,27 +130,27 @@ func TestRepositoryFailures(t *testing.T) {
 				// Create workflow directory
 				workflowDir := filepath.Join(repoPath, ".github", "workflows")
 				if err := os.MkdirAll(workflowDir, 0750); err != nil {
-					t.Fatalf("Failed to create workflows directory: %v", err)
+					t.Fatalf(common.ErrFailedToCreateWorkflowsDir, err)
 				}
 
 				// Create invalid workflow file
 				workflowFile := filepath.Join(workflowDir, "invalid.yml")
 				invalidContent := `
 invalid:
-  - yaml:
-    content:
-      - missing: colon
-        broken syntax
+		- yaml:
+				content:
+				  - missing: colon
+				    broken syntax
 `
 				if err := os.WriteFile(workflowFile, []byte(invalidContent), 0600); err != nil {
-					t.Fatalf("Failed to write invalid workflow file: %v", err)
+					t.Fatalf(common.ErrFailedToWriteWorkflowFile, err)
 				}
 
 				// Attempt to parse invalid workflow
 				scanner := env.createScanner()
 				_, err := scanner.ParseActionReferences(workflowFile)
 				if err == nil {
-					t.Error("Expected error when parsing invalid workflow, got nil")
+					t.Errorf(common.ErrExpectedError, "invalid YAML")
 				}
 			},
 		},

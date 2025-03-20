@@ -69,7 +69,12 @@ func TestCleanupScenarios(t *testing.T) {
 				// Keep file open in a goroutine
 				done := make(chan bool)
 				go func() {
-					defer f.Close()
+					defer func(f *os.File) {
+						err := f.Close()
+						if err != nil {
+							t.Errorf("Failed to close file: %v", err)
+						}
+					}(f)
 					<-done
 				}()
 

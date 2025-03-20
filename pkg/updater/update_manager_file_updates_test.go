@@ -8,15 +8,22 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 )
 
 func TestApplyFileUpdatesWithVariousFormats(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "update-manager-test")
 	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
+		t.Fatalf(common.ErrFailedToCreateTempDir, err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf(common.ErrFailedToRemoveTempDir, err)
+		}
+	}(tempDir)
 
 	manager := NewUpdateManager(tempDir)
 	ctx := context.Background()
@@ -205,7 +212,7 @@ jobs:
 			// Create the test file
 			filePath := tc.updates[0].FilePath
 			if err := os.WriteFile(filePath, []byte(tc.content), 0600); err != nil {
-				t.Fatalf("Failed to create test file: %v", err)
+				t.Fatalf(common.ErrFailedToCreateTestFile, err)
 			}
 
 			// Apply updates
@@ -217,14 +224,14 @@ jobs:
 			// Read the updated file
 			content, err := os.ReadFile(filePath)
 			if err != nil {
-				t.Fatalf("Failed to read updated file: %v", err)
+				t.Fatalf(common.ErrFailedToReadUpdatedFile, err)
 			}
 
 			// Check if the updates were applied correctly
 			updatedContent := string(content)
 			for _, expected := range tc.expected {
 				if !strings.Contains(updatedContent, expected) {
-					t.Errorf("Expected %q to be in the updated content, but it wasn't.\nUpdated content:\n%s", expected, updatedContent)
+					t.Errorf(common.ErrExpectedContentNotFound, expected, updatedContent)
 				}
 			}
 		})
@@ -235,9 +242,14 @@ func TestApplyFileUpdatesErrorHandling(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "update-manager-test")
 	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
+		t.Fatalf(common.ErrFailedToCreateTempDir, err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf(common.ErrFailedToRemoveTempDir, err)
+		}
+	}(tempDir)
 
 	manager := NewUpdateManager(tempDir)
 	ctx := context.Background()
@@ -265,7 +277,7 @@ func TestApplyFileUpdatesErrorHandling(t *testing.T) {
 
 	err = manager.ApplyUpdates(ctx, updates)
 	if err == nil {
-		t.Errorf("Expected error for non-existent file, got nil")
+		t.Errorf(common.ErrExpectedNonExistentFileError)
 	}
 
 	// Test with invalid line number
@@ -278,7 +290,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2`
 	if err := os.WriteFile(validFile, []byte(content), 0600); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
+		t.Fatalf(common.ErrFailedToCreateTestFile, err)
 	}
 
 	invalidLineUpdates := []*Update{
@@ -302,15 +314,20 @@ jobs:
 
 	err = manager.ApplyUpdates(ctx, invalidLineUpdates)
 	if err == nil {
-		t.Errorf("Expected error for invalid line number, got nil")
+		t.Errorf(common.ErrExpectedInvalidLineError)
 	}
 
 	// Test with file outside base directory
 	outsideFile := filepath.Join(os.TempDir(), "outside.yml")
 	if err := os.WriteFile(outsideFile, []byte(content), 0600); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
+		t.Fatalf(common.ErrFailedToCreateTestFile, err)
 	}
-	defer os.Remove(outsideFile)
+	defer func(name string) {
+		err := os.Remove(name)
+		if err != nil {
+			t.Fatalf(common.ErrFailedToRemoveTestFile, err)
+		}
+	}(outsideFile)
 
 	outsideUpdates := []*Update{
 		{
@@ -333,13 +350,13 @@ jobs:
 
 	err = manager.ApplyUpdates(ctx, outsideUpdates)
 	if err == nil {
-		t.Errorf("Expected error for file outside base directory, got nil")
+		t.Errorf(common.ErrExpectedOutsidePathError)
 	}
 
 	// Test with read-only file
 	readOnlyFile := filepath.Join(tempDir, "readonly.yml")
 	if err := os.WriteFile(readOnlyFile, []byte(content), 0400); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
+		t.Fatalf(common.ErrFailedToCreateTestFile, err)
 	}
 
 	readOnlyUpdates := []*Update{
@@ -365,7 +382,7 @@ jobs:
 	if err == nil {
 		// This might pass on some systems where the current user has write permission
 		// regardless of file permissions, so we'll just log it
-		t.Logf("Expected error for read-only file, but got nil. This might be system-dependent.")
+		t.Logf(common.ErrExpectedReadOnlyFileError)
 	}
 }
 
@@ -373,9 +390,14 @@ func TestApplyFileUpdatesConcurrent(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "update-manager-test")
 	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
+		t.Fatalf(common.ErrFailedToCreateTempDir, err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf(common.ErrFailedToRemoveTempDir, err)
+		}
+	}(tempDir)
 
 	manager := NewUpdateManager(tempDir)
 	ctx := context.Background()
@@ -394,7 +416,7 @@ jobs:
       - uses: actions/setup-go@v3`
 	testFile := filepath.Join(tempDir, "concurrent.yml")
 	if err := os.WriteFile(testFile, []byte(content), 0600); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
+		t.Fatalf(common.ErrFailedToCreateTestFile, err)
 	}
 
 	// Create updates for different actions
@@ -524,7 +546,7 @@ jobs:
 	// Read the updated file
 	updatedContent, err := os.ReadFile(testFile)
 	if err != nil {
-		t.Fatalf("Failed to read updated file: %v", err)
+		t.Fatalf(common.ErrFailedToReadUpdatedFile, err)
 	}
 
 	// Check if all updates were applied correctly
@@ -541,7 +563,7 @@ jobs:
 
 	for _, expected := range expectedUpdates {
 		if !strings.Contains(contentStr, expected) {
-			t.Errorf("Expected %q to be in the updated content, but it wasn't.\nUpdated content:\n%s", expected, contentStr)
+			t.Errorf(common.ErrExpectedContentNotFound, expected, contentStr)
 		}
 	}
 }
@@ -550,9 +572,14 @@ func TestApplyFileUpdatesEdgeCases(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "update-manager-test")
 	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
+		t.Fatalf(common.ErrFailedToCreateTempDir, err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf(common.ErrFailedToRemoveTempDir, err)
+		}
+	}(tempDir)
 
 	manager := NewUpdateManager(tempDir)
 	ctx := context.Background()
@@ -560,7 +587,7 @@ func TestApplyFileUpdatesEdgeCases(t *testing.T) {
 	// Test with empty file
 	emptyFile := filepath.Join(tempDir, "empty.yml")
 	if err := os.WriteFile(emptyFile, []byte(""), 0600); err != nil {
-		t.Fatalf("Failed to create empty file: %v", err)
+		t.Fatalf(common.ErrFailedToCreateEmptyFile, err)
 	}
 
 	emptyUpdates := []*Update{
@@ -590,13 +617,13 @@ func TestApplyFileUpdatesEdgeCases(t *testing.T) {
 	// Let's verify that the file now contains the version comment.
 	emptyContent, err := os.ReadFile(emptyFile)
 	if err != nil {
-		t.Fatalf("Failed to read empty file after update: %v", err)
+		t.Fatalf(common.ErrFailedToReadEmptyFile, err)
 	}
 
 	// Check if the file contains the version comment
 	emptyContentStr := string(emptyContent)
 	if !strings.Contains(emptyContentStr, "# v3") {
-		t.Errorf("Expected empty file to contain version comment, got content: %s", emptyContentStr)
+		t.Errorf(common.ErrExpectedVersionComment, emptyContentStr)
 	}
 
 	// Test with file containing special characters
@@ -610,7 +637,7 @@ jobs:
       - uses: actions/checkout@v2  # Comment with "quotes" and 'apostrophes'
       - uses: actions/setup-node@v3  # Comment with symbols: !@#$%^&*()_+`
 	if err := os.WriteFile(specialFile, []byte(specialContent), 0600); err != nil {
-		t.Fatalf("Failed to create special file: %v", err)
+		t.Fatalf(common.ErrFailedToCreateSpecialFile, err)
 	}
 
 	specialUpdates := []*Update{
@@ -640,14 +667,14 @@ jobs:
 	// Read the updated file
 	updatedContent, err := os.ReadFile(specialFile)
 	if err != nil {
-		t.Fatalf("Failed to read updated special file: %v", err)
+		t.Fatalf(common.ErrFailedToReadSpecialFile, err)
 	}
 
 	// Check if the update was applied correctly
 	content := string(updatedContent)
 	expected := "actions/checkout@a81bbbf8298c0fa03ea29cdc473d45769f953675"
 	if !strings.Contains(content, expected) {
-		t.Errorf("Expected %q to be in the updated content, but it wasn't.\nUpdated content:\n%s", expected, content)
+		t.Errorf(common.ErrExpectedContentNotFound, expected, content)
 	}
 
 	// Test with multiple updates to the same line
@@ -660,7 +687,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2`
 	if err := os.WriteFile(sameLineFile, []byte(sameLineContent), 0600); err != nil {
-		t.Fatalf("Failed to create same line file: %v", err)
+		t.Fatalf(common.ErrFailedToCreateSameLineFile, err)
 	}
 
 	sameLineUpdates := []*Update{
@@ -706,17 +733,17 @@ jobs:
 	// Read the updated file
 	updatedContent, err = os.ReadFile(sameLineFile)
 	if err != nil {
-		t.Fatalf("Failed to read updated same line file: %v", err)
+		t.Fatalf(common.ErrFailedToReadSameLineFile, err)
 	}
 
 	// Check if the last update was applied
 	content = string(updatedContent)
 	expected = "actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11"
 	if !strings.Contains(content, expected) {
-		t.Errorf("Expected %q to be in the updated content, but it wasn't.\nUpdated content:\n%s", expected, content)
+		t.Errorf(common.ErrExpectedContentNotFound, expected, content)
 	}
 	expected = "# v4"
 	if !strings.Contains(content, expected) {
-		t.Errorf("Expected %q to be in the updated content, but it wasn't.\nUpdated content:\n%s", expected, content)
+		t.Errorf(common.ErrExpectedContentNotFound, expected, content)
 	}
 }

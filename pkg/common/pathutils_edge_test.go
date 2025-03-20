@@ -7,31 +7,104 @@ import (
 	"testing"
 )
 
+// Use error constants from the shared error_util.go file
+
+// PathValidationTestCase defines a test case structure for ValidatePath tests
+type PathValidationTestCase struct {
+	name        string
+	baseDir     string
+	path        string
+	options     PathValidationOptions
+	expectError bool
+	skipOnError error // Skip this test if this error occurred during setup
+}
+
+// JoinPathTestCase defines a test case structure for JoinAndValidatePath tests
+type JoinPathTestCase struct {
+	name        string
+	baseDir     string
+	elements    []string
+	expectError bool
+}
+
+// SafeAbsTestCase defines a test case structure for SafeAbs tests
+type SafeAbsTestCase struct {
+	name        string
+	baseDir     string
+	path        string
+	expectError bool
+}
+
+// setupTestDirectory creates a temporary directory for testing and returns its path.
+// It fails the test if directory creation fails.
+func setupTestDirectory(t *testing.T, prefix string) string {
+	t.Helper()
+	tempDir, err := os.MkdirTemp("", prefix)
+	if err != nil {
+		t.Fatalf(ErrFailedToCreateTempDir, err)
+	}
+	return tempDir
+}
+
+// cleanupTestDirectory removes a temporary directory.
+// It fails the test if directory removal fails.
+func cleanupTestDirectory(t *testing.T, path string) {
+	t.Helper()
+	if err := os.RemoveAll(path); err != nil {
+		t.Fatalf(ErrFailedToRemoveTempDir, err)
+	}
+}
+
+// createSubDirectory creates a subdirectory in the specified path.
+// It fails the test if directory creation fails.
+func createSubDirectory(t *testing.T, parent, name string) string {
+	t.Helper()
+	subDir := filepath.Join(parent, name)
+	if err := os.Mkdir(subDir, 0750); err != nil {
+		t.Fatalf(ErrFailedToCreateSubdir, err)
+	}
+	return subDir
+}
+
+// createTestFile creates a file with the specified content and permissions.
+// It fails the test if file creation fails.
+func createTestFile(t *testing.T, path string, content []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, content, perm); err != nil {
+		t.Fatalf(ErrFailedToCreateTestFile, err)
+	}
+}
+
+// saveWorkingDirectory saves the current working directory and returns
+// a function that restores it when called.
+func saveWorkingDirectory(t *testing.T) func() {
+	t.Helper()
+	origWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf(ErrFailedToGetWorkingDir, err)
+	}
+	return func() {
+		if err := os.Chdir(origWd); err != nil {
+			t.Logf("Warning: Failed to restore working directory: %v", err)
+		}
+	}
+}
+
 func TestValidatePathEdgeCases(t *testing.T) {
 	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "pathutils-edge-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := setupTestDirectory(t, "pathutils-edge-test")
+	defer cleanupTestDirectory(t, tempDir)
 
 	// Create a subdirectory
-	subDir := filepath.Join(tempDir, "subdir")
-	if err := os.Mkdir(subDir, 0750); err != nil {
-		t.Fatalf("Failed to create subdirectory: %v", err)
-	}
+	createSubDirectory(t, tempDir, "subdir")
 
 	// Create a test file
 	testFile := filepath.Join(tempDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test"), 0600); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
+	createTestFile(t, testFile, []byte("test"), 0600)
 
 	// Create a file with no read permissions
 	noReadFile := filepath.Join(tempDir, "noread.txt")
-	if err := os.WriteFile(noReadFile, []byte("test"), 0200); err != nil {
-		t.Fatalf("Failed to create no-read file: %v", err)
-	}
+	createTestFile(t, noReadFile, []byte("test"), 0200)
 
 	// Create a symlink if the OS supports it
 	symlink := filepath.Join(tempDir, "symlink")
@@ -41,11 +114,13 @@ func TestValidatePathEdgeCases(t *testing.T) {
 	// Create a symlink outside the base directory if the OS supports it
 	outsideSymlink := filepath.Join(tempDir, "outside-symlink")
 	outsideTarget := filepath.Join(os.TempDir(), "outside.txt")
-	if err := os.WriteFile(outsideTarget, []byte("outside"), 0600); err != nil {
-		t.Fatalf("Failed to create outside target file: %v", err)
-	}
+	createTestFile(t, outsideTarget, []byte("outside"), 0600)
 	outsideSymErr := os.Symlink(outsideTarget, outsideSymlink)
-	defer os.Remove(outsideTarget)
+	defer func() {
+		if err := os.Remove(outsideTarget); err != nil {
+			t.Fatalf(ErrFailedToRemoveSymlink, err)
+		}
+	}()
 
 	// Create a broken symlink
 	brokenSymlink := filepath.Join(tempDir, "broken-symlink")
@@ -56,14 +131,7 @@ func TestValidatePathEdgeCases(t *testing.T) {
 	recursiveSymlink := filepath.Join(tempDir, "recursive-symlink")
 	recursiveSymErr := os.Symlink(recursiveSymlink, recursiveSymlink)
 
-	tests := []struct {
-		name        string
-		baseDir     string
-		path        string
-		options     PathValidationOptions
-		expectError bool
-		skipOnError error // Skip this test if this error occurred during setup
-	}{
+	tests := []PathValidationTestCase{
 		{
 			name:    "Path exceeding maximum length",
 			baseDir: tempDir,
@@ -160,6 +228,12 @@ func TestValidatePathEdgeCases(t *testing.T) {
 		},
 	}
 
+	runValidatePathTests(t, tests)
+}
+
+// runValidatePathTests executes the validation test cases and checks the results.
+func runValidatePathTests(t *testing.T, tests []PathValidationTestCase) {
+	t.Helper()
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.skipOnError != nil {
@@ -178,45 +252,27 @@ func TestValidatePathEdgeCases(t *testing.T) {
 
 func TestValidatePathWithRelativePaths(t *testing.T) {
 	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "pathutils-relative-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := setupTestDirectory(t, "pathutils-relative-test")
+	defer cleanupTestDirectory(t, tempDir)
 
-	// Save current working directory
-	origWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current working directory: %v", err)
-	}
-	defer func() {
-		_ = os.Chdir(origWd)
-	}()
+	// Save current working directory and restore it later
+	restoreWd := saveWorkingDirectory(t)
+	defer restoreWd()
 
 	// Change to the temporary directory
 	if err := os.Chdir(tempDir); err != nil {
-		t.Fatalf("Failed to change to temporary directory: %v", err)
+		t.Fatalf(ErrFailedToChangeTempDir, err)
 	}
 
 	// Create a subdirectory
 	subDir := "subdir"
-	if err := os.Mkdir(subDir, 0750); err != nil {
-		t.Fatalf("Failed to create subdirectory: %v", err)
-	}
+	createSubDirectory(t, ".", subDir)
 
 	// Create a test file
 	testFile := filepath.Join(subDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test"), 0600); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
+	createTestFile(t, testFile, []byte("test"), 0600)
 
-	tests := []struct {
-		name        string
-		baseDir     string
-		path        string
-		options     PathValidationOptions
-		expectError bool
-	}{
+	tests := []PathValidationTestCase{
 		{
 			name:        "Relative path within base directory",
 			baseDir:     ".",
@@ -254,47 +310,27 @@ func TestValidatePathWithRelativePaths(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := ValidatePath(tc.baseDir, tc.path, tc.options)
-			if tc.expectError && err == nil {
-				t.Errorf("Expected error but got nil")
-			} else if !tc.expectError && err != nil {
-				t.Errorf("Expected no error but got: %v", err)
-			}
-		})
-	}
+	runValidatePathTests(t, tests)
 }
 
 func TestJoinAndValidatePathEdgeCases(t *testing.T) {
 	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "pathutils-join-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := setupTestDirectory(t, "pathutils-join-test")
+	defer cleanupTestDirectory(t, tempDir)
 
 	// Create a subdirectory
-	subDir := filepath.Join(tempDir, "subdir")
-	if err := os.Mkdir(subDir, 0750); err != nil {
-		t.Fatalf("Failed to create subdirectory: %v", err)
-	}
+	createSubDirectory(t, tempDir, "subdir")
 
-	tests := []struct {
-		name        string
-		baseDir     string
-		elements    []string
-		expectError bool
-	}{
+	tests := []JoinPathTestCase{
 		{
 			name:        "Absolute path within base directory",
 			baseDir:     tempDir,
-			elements:    []string{subDir, "file.txt"},
+			elements:    []string{filepath.Join(tempDir, "subdir"), "file.txt"},
 			expectError: false,
 		},
 		{
 			name:        "Absolute path outside base directory",
-			baseDir:     subDir,
+			baseDir:     filepath.Join(tempDir, "subdir"),
 			elements:    []string{tempDir, "file.txt"},
 			expectError: true,
 		},
@@ -330,6 +366,12 @@ func TestJoinAndValidatePathEdgeCases(t *testing.T) {
 		},
 	}
 
+	runJoinPathTests(t, tests)
+}
+
+// runJoinPathTests executes the test cases for the JoinAndValidatePath function.
+func runJoinPathTests(t *testing.T, tests []JoinPathTestCase) {
+	t.Helper()
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := JoinAndValidatePath(tc.baseDir, tc.elements...)
@@ -344,38 +386,23 @@ func TestJoinAndValidatePathEdgeCases(t *testing.T) {
 
 func TestSafeAbsEdgeCases(t *testing.T) {
 	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "pathutils-abs-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer os.RemoveAll(tempDir)
+	tempDir := setupTestDirectory(t, "pathutils-abs-test")
+	defer cleanupTestDirectory(t, tempDir)
 
-	// Save current working directory
-	origWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current working directory: %v", err)
-	}
-	defer func() {
-		_ = os.Chdir(origWd)
-	}()
+	// Save current working directory and restore it later
+	restoreWd := saveWorkingDirectory(t)
+	defer restoreWd()
 
 	// Change to the temporary directory
 	if err := os.Chdir(tempDir); err != nil {
-		t.Fatalf("Failed to change to temporary directory: %v", err)
+		t.Fatalf(ErrFailedToChangeTempDir, err)
 	}
 
 	// Create a subdirectory
 	subDir := "subdir"
-	if err := os.Mkdir(subDir, 0750); err != nil {
-		t.Fatalf("Failed to create subdirectory: %v", err)
-	}
+	createSubDirectory(t, ".", subDir)
 
-	tests := []struct {
-		name        string
-		baseDir     string
-		path        string
-		expectError bool
-	}{
+	tests := []SafeAbsTestCase{
 		{
 			name:        "Relative path within base directory",
 			baseDir:     ".",
@@ -408,6 +435,12 @@ func TestSafeAbsEdgeCases(t *testing.T) {
 		},
 	}
 
+	runSafeAbsTests(t, tests)
+}
+
+// runSafeAbsTests executes the test cases for the SafeAbs function.
+func runSafeAbsTests(t *testing.T, tests []SafeAbsTestCase) {
+	t.Helper()
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := SafeAbs(tc.baseDir, tc.path)

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 )
 
 func TestParseActionReferencesInvalidSyntax(t *testing.T) {
@@ -99,13 +101,18 @@ jobs:
 			// Create temporary directory
 			tempDir, err := os.MkdirTemp("", "workflow-test")
 			if err != nil {
-				t.Fatalf("Failed to create temp dir: %v", err)
+				t.Fatalf(common.ErrFailedToCreateTempDir, err)
 			}
-			defer os.RemoveAll(tempDir)
+			defer func(path string) {
+				err := os.RemoveAll(path)
+				if err != nil {
+					t.Fatalf(common.ErrFailedToRemoveTempDir, err)
+				}
+			}(tempDir)
 
 			// Set secure permissions on temp directory
 			if err := os.Chmod(tempDir, 0750); err != nil {
-				t.Fatalf("Failed to set temp dir permissions: %v", err)
+				t.Fatalf(common.ErrFailedToSetTempDirPermissions, err)
 			}
 
 			// Create scanner with temp directory as base
@@ -115,7 +122,7 @@ jobs:
 			testFile := filepath.Join(tempDir, "workflow.yml")
 			err = os.WriteFile(testFile, []byte(tt.content), tt.permissions)
 			if err != nil {
-				t.Fatalf("Failed to create test file: %v", err)
+				t.Fatalf(common.ErrFailedToCreateTestFile, err)
 			}
 
 			// Parse action references
@@ -126,7 +133,7 @@ jobs:
 			}
 
 			if !strings.Contains(err.Error(), tt.wantErrMsg) {
-				t.Errorf("Expected error containing %q, got %q", tt.wantErrMsg, err.Error())
+				t.Errorf(common.ErrExpectedErrorContaining, tt.wantErrMsg, err.Error())
 			}
 		})
 	}
@@ -177,20 +184,25 @@ func TestScanWorkflowsErrors(t *testing.T) {
 			// Create temporary directory
 			tempDir, err := os.MkdirTemp("", "workflow-test")
 			if err != nil {
-				t.Fatalf("Failed to create temp dir: %v", err)
+				t.Fatalf(common.ErrFailedToCreateTempDir, err)
 			}
-			defer os.RemoveAll(tempDir)
+			defer func(path string) {
+				err := os.RemoveAll(path)
+				if err != nil {
+					t.Fatalf(common.ErrFailedToRemoveTempDir, err)
+				}
+			}(tempDir)
 
 			// Set secure permissions on temp directory
 			if err := os.Chmod(tempDir, 0750); err != nil {
-				t.Fatalf("Failed to set temp dir permissions: %v", err)
+				t.Fatalf(common.ErrFailedToSetTempDirPermissions, err)
 			}
 
 			workflowsDir := filepath.Join(tempDir, ".github", "workflows")
 
 			// Set up test case
 			if err := tt.setup(workflowsDir); err != nil {
-				t.Fatalf("Failed to set up test: %v", err)
+				t.Fatalf(common.ErrFailedToSetupTest, err)
 			}
 
 			// Create scanner with temp directory as base
@@ -202,7 +214,7 @@ func TestScanWorkflowsErrors(t *testing.T) {
 			}
 
 			if !strings.Contains(err.Error(), tt.wantErrMsg) {
-				t.Errorf("Expected error containing %q, got %q", tt.wantErrMsg, err.Error())
+				t.Errorf(common.ErrExpectedErrorContaining, tt.wantErrMsg, err.Error())
 			}
 		})
 	}
@@ -257,7 +269,7 @@ func TestParseActionReferenceErrors(t *testing.T) {
 			}
 
 			if !strings.Contains(err.Error(), tt.wantErrMsg) {
-				t.Errorf("Expected error containing %q, got %q", tt.wantErrMsg, err.Error())
+				t.Errorf(common.ErrExpectedErrorContaining, tt.wantErrMsg, err.Error())
 			}
 		})
 	}
@@ -340,27 +352,27 @@ func TestParseActionReferenceSuccess(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			action, err := parseActionReference(tt.ref, tt.path, tt.comments)
 			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
+				t.Errorf(common.ErrUnexpectedError, err)
 				return
 			}
 
 			if action.Owner != tt.expectedOwner {
-				t.Errorf("Expected owner %q, got %q", tt.expectedOwner, action.Owner)
+				t.Errorf(common.ErrExpectedResult, tt.expectedOwner, action.Owner)
 			}
 			if action.Name != tt.expectedName {
-				t.Errorf("Expected name %q, got %q", tt.expectedName, action.Name)
+				t.Errorf(common.ErrExpectedResult, tt.expectedName, action.Name)
 			}
 			if action.Version != tt.expectedVer {
-				t.Errorf("Expected version %q, got %q", tt.expectedVer, action.Version)
+				t.Errorf(common.ErrExpectedResult, tt.expectedVer, action.Version)
 			}
 			if action.CommitHash != tt.expectedCommit {
-				t.Errorf("Expected commit hash %q, got %q", tt.expectedCommit, action.CommitHash)
+				t.Errorf(common.ErrExpectedResult, tt.expectedCommit, action.CommitHash)
 			}
 			if action.Path != tt.path {
-				t.Errorf("Expected path %q, got %q", tt.path, action.Path)
+				t.Errorf(common.ErrExpectedResult, tt.path, action.Path)
 			}
 			if len(action.Comments) != len(tt.comments) {
-				t.Errorf("Expected %d comments, got %d", len(tt.comments), len(action.Comments))
+				t.Errorf(common.ErrExpectedResult, len(tt.comments), len(action.Comments))
 			}
 		})
 	}
@@ -395,13 +407,18 @@ jobs:
 	// Create temporary directory
 	tempDir, err := os.MkdirTemp("", "workflow-test")
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+		t.Fatalf(common.ErrFailedToCreateTempDir, err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf(common.ErrFailedToRemoveTempDir, err)
+		}
+	}(tempDir)
 
 	// Set secure permissions on temp directory
 	if err := os.Chmod(tempDir, 0750); err != nil {
-		t.Fatalf("Failed to set temp dir permissions: %v", err)
+		t.Fatalf(common.ErrFailedToSetTempDirPermissions, err)
 	}
 
 	// Create scanner with temp directory as base
@@ -411,19 +428,19 @@ jobs:
 	testFile := filepath.Join(tempDir, "workflow.yml")
 	err = os.WriteFile(testFile, []byte(workflowContent), 0600)
 	if err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
+		t.Fatalf(common.ErrFailedToCreateTestFile, err)
 	}
 
 	// Parse action references
 	actions, err := scanner.ParseActionReferences(testFile)
 	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
+		t.Fatalf(common.ErrUnexpectedError, err)
 	}
 
 	// Check the number of actions found
 	expectedCount := 4 // 3 regular actions + 1 matrix action
 	if len(actions) != expectedCount {
-		t.Errorf("Expected %d actions, got %d", expectedCount, len(actions))
+		t.Errorf(common.ErrExpectedActions, expectedCount, len(actions))
 	}
 
 	// Check specific actions
@@ -432,15 +449,15 @@ jobs:
 		case action.Owner == "actions" && action.Name == "checkout" && action.Version == "v2":
 			// Standard version reference
 			if action.CommitHash != "" {
-				t.Errorf("Expected empty commit hash for checkout@v2, got %q", action.CommitHash)
+				t.Errorf(common.ErrExpectedEmptyCommitHash, "checkout@v2", action.CommitHash)
 			}
 		case action.Owner == "actions" && action.Name == "setup-node":
 			// Commit hash reference with original version comment
 			if action.CommitHash != "a81bbbf8298c0fa03ea29cdc473d45769f953675" {
-				t.Errorf("Expected commit hash a81bbbf8298c0fa03ea29cdc473d45769f953675, got %q", action.CommitHash)
+				t.Errorf(common.ErrExpectedCommitHash, "a81bbbf8298c0fa03ea29cdc473d45769f953675", action.CommitHash)
 			}
 			if action.Version != "v3" {
-				t.Errorf("Expected version v3 from comment, got %q", action.Version)
+				t.Errorf(common.ErrExpectedVersionFromComment, "v3", action.Version)
 			}
 		case action.Owner == "matrix" && action.Name == "action" && action.Version == "dynamic":
 			// Matrix expression
@@ -448,10 +465,10 @@ jobs:
 		case action.Owner == "actions" && action.Name == "setup-python" && action.Version == "v3.10.4":
 			// Nested action
 			if action.CommitHash != "" {
-				t.Errorf("Expected empty commit hash for setup-python@v3.10.4, got %q", action.CommitHash)
+				t.Errorf(common.ErrExpectedEmptyCommitHash, "setup-python@v3.10.4", action.CommitHash)
 			}
 		default:
-			t.Errorf("Unexpected action: %s/%s@%s", action.Owner, action.Name, action.Version)
+			t.Errorf(common.ErrUnexpectedActionFound, action.Owner, action.Name, action.Version)
 		}
 	}
 }
@@ -460,19 +477,24 @@ func TestScanWorkflowsSuccess(t *testing.T) {
 	// Create temporary directory
 	tempDir, err := os.MkdirTemp("", "workflow-test")
 	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+		t.Fatalf(common.ErrFailedToCreateTempDir, err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf(common.ErrFailedToRemoveTempDir, err)
+		}
+	}(tempDir)
 
 	// Set secure permissions on temp directory
 	if err := os.Chmod(tempDir, 0750); err != nil {
-		t.Fatalf("Failed to set temp dir permissions: %v", err)
+		t.Fatalf(common.ErrFailedToSetTempDirPermissions, err)
 	}
 
 	// Create workflows directory
 	workflowsDir := filepath.Join(tempDir, ".github", "workflows")
 	if err := os.MkdirAll(workflowsDir, 0750); err != nil {
-		t.Fatalf("Failed to create workflows directory: %v", err)
+		t.Fatalf(common.ErrFailedToCreateWorkflowsDir, err)
 	}
 
 	// Create test workflow files
@@ -509,7 +531,7 @@ jobs:
 	for _, file := range files {
 		filePath := filepath.Join(workflowsDir, file.name)
 		if err := os.WriteFile(filePath, []byte(file.content), 0600); err != nil {
-			t.Fatalf("Failed to create test file %s: %v", file.name, err)
+			t.Fatalf(common.ErrFailedToCreateTestFileNamed, file.name, err)
 		}
 	}
 
@@ -519,13 +541,13 @@ jobs:
 	// Scan workflows
 	workflows, err := scanner.ScanWorkflows(workflowsDir)
 	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
+		t.Fatalf(common.ErrUnexpectedError, err)
 	}
 
 	// Check the number of workflows found
 	expectedCount := 2 // Only .yml and .yaml files
 	if len(workflows) != expectedCount {
-		t.Errorf("Expected %d workflows, got %d", expectedCount, len(workflows))
+		t.Errorf(common.ErrExpectedWorkflows, expectedCount, len(workflows))
 	}
 
 	// Check that the correct files were found
@@ -538,14 +560,14 @@ jobs:
 		case "workflow2.yaml":
 			foundWorkflow2 = true
 		default:
-			t.Errorf("Unexpected workflow file: %s", workflow)
+			t.Errorf(common.ErrUnexpectedWorkflowFile, workflow)
 		}
 	}
 
 	if !foundWorkflow1 {
-		t.Error("workflow1.yml not found")
+		t.Errorf(common.ErrSpecificWorkflowNotFound, "workflow1.yml")
 	}
 	if !foundWorkflow2 {
-		t.Error("workflow2.yaml not found")
+		t.Errorf(common.ErrSpecificWorkflowNotFound, "workflow2.yaml")
 	}
 }

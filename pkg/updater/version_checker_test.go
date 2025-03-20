@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 	"github.com/google/go-github/v58/github"
 	"golang.org/x/oauth2"
 )
@@ -35,21 +36,21 @@ func TestNewDefaultVersionChecker(t *testing.T) {
 			checker := NewDefaultVersionChecker(tt.token)
 
 			if checker == nil {
-				t.Fatal("NewDefaultVersionChecker() returned nil")
+				t.Fatal(common.ErrVersionCheckerNil)
 			}
 
 			if checker.client == nil {
-				t.Fatal("NewDefaultVersionChecker() client is nil")
+				t.Fatal(common.ErrVersionCheckerClientNil)
 			}
 
 			transport := checker.client.Client().Transport
 			if tt.wantAuth {
 				if _, ok := transport.(*oauth2.Transport); !ok {
-					t.Error("Expected authenticated client, got unauthenticated")
+					t.Error(common.ErrExpectedAuthClient)
 				}
 			} else {
 				if _, ok := transport.(*oauth2.Transport); ok {
-					t.Error("Expected unauthenticated client, got authenticated")
+					t.Error(common.ErrExpectedUnauthClient)
 				}
 			}
 		})
@@ -152,9 +153,15 @@ func TestDefaultVersionChecker_GetLatestVersion(t *testing.T) {
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
 				case "/repos/owner/repo/releases/latest":
-					fmt.Fprintf(w, `{"tag_name": "v1.0.0"}`)
+					_, err := fmt.Fprintf(w, `{"tag_name": "v1.0.0"}`)
+					if err != nil {
+						return
+					}
 				case "/repos/owner/repo/git/ref/tags/v1.0.0":
-					fmt.Fprintf(w, `{"object": {"sha": "abc123", "type": "commit"}}`)
+					_, err := fmt.Fprintf(w, `{"object": {"sha": "abc123", "type": "commit"}}`)
+					if err != nil {
+						return
+					}
 				default:
 					http.Error(w, "not found", http.StatusNotFound)
 				}
@@ -174,9 +181,15 @@ func TestDefaultVersionChecker_GetLatestVersion(t *testing.T) {
 				case "/repos/owner/repo/releases/latest":
 					http.Error(w, "Not found", http.StatusNotFound)
 				case "/repos/owner/repo/tags":
-					fmt.Fprintf(w, `[{"name": "v1.0.0"}]`)
+					_, err := fmt.Fprintf(w, `[{"name": "v1.0.0"}]`)
+					if err != nil {
+						return
+					}
 				case "/repos/owner/repo/git/ref/tags/v1.0.0":
-					fmt.Fprintf(w, `{"object": {"sha": "def456", "type": "commit"}}`)
+					_, err := fmt.Fprintf(w, `{"object": {"sha": "def456", "type": "commit"}}`)
+					if err != nil {
+						return
+					}
 				default:
 					http.Error(w, "not found", http.StatusNotFound)
 				}
@@ -214,7 +227,10 @@ func TestDefaultVersionChecker_GetLatestVersion(t *testing.T) {
 				case "/repos/owner/repo/releases/latest":
 					http.Error(w, "Not found", http.StatusNotFound)
 				case "/repos/owner/repo/tags":
-					fmt.Fprintf(w, `[]`)
+					_, err := fmt.Fprintf(w, `[]`)
+					if err != nil {
+						return
+					}
 				default:
 					http.Error(w, "not found", http.StatusNotFound)
 				}
@@ -231,8 +247,8 @@ func TestDefaultVersionChecker_GetLatestVersion(t *testing.T) {
 
 			// Create a client that points to the test server
 			client := github.NewClient(nil)
-			url, _ := url.Parse(server.URL + "/")
-			client.BaseURL = url
+			parseUrl, _ := url.Parse(server.URL + "/")
+			client.BaseURL = parseUrl
 
 			checker := &DefaultVersionChecker{client: client}
 
@@ -273,9 +289,15 @@ func TestDefaultVersionChecker_IsUpdateAvailable(t *testing.T) {
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
 				case "/repos/owner/repo/releases/latest":
-					fmt.Fprintf(w, `{"tag_name": "v2.0.0"}`)
+					_, err := fmt.Fprintf(w, `{"tag_name": "v2.0.0"}`)
+					if err != nil {
+						return
+					}
 				case "/repos/owner/repo/git/ref/tags/v2.0.0":
-					fmt.Fprintf(w, `{"object": {"sha": "abc123", "type": "commit"}}`)
+					_, err := fmt.Fprintf(w, `{"object": {"sha": "abc123", "type": "commit"}}`)
+					if err != nil {
+						return
+					}
 				default:
 					http.Error(w, "not found", http.StatusNotFound)
 				}
@@ -296,9 +318,15 @@ func TestDefaultVersionChecker_IsUpdateAvailable(t *testing.T) {
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
 				case "/repos/owner/repo/releases/latest":
-					fmt.Fprintf(w, `{"tag_name": "v1.0.0"}`)
+					_, err := fmt.Fprintf(w, `{"tag_name": "v1.0.0"}`)
+					if err != nil {
+						return
+					}
 				case "/repos/owner/repo/git/ref/tags/v1.0.0":
-					fmt.Fprintf(w, `{"object": {"sha": "new123", "type": "commit"}}`)
+					_, err := fmt.Fprintf(w, `{"object": {"sha": "new123", "type": "commit"}}`)
+					if err != nil {
+						return
+					}
 				default:
 					http.Error(w, "not found", http.StatusNotFound)
 				}
@@ -318,9 +346,15 @@ func TestDefaultVersionChecker_IsUpdateAvailable(t *testing.T) {
 			mockHandler: func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
 				case "/repos/owner/repo/releases/latest":
-					fmt.Fprintf(w, `{"tag_name": "v1.0.0"}`)
+					_, err := fmt.Fprintf(w, `{"tag_name": "v1.0.0"}`)
+					if err != nil {
+						return
+					}
 				case "/repos/owner/repo/git/ref/tags/v1.0.0":
-					fmt.Fprintf(w, `{"object": {"sha": "abc123def456789abcdef0123456789abcdef012", "type": "commit"}}`)
+					_, err := fmt.Fprintf(w, `{"object": {"sha": "abc123def456789abcdef0123456789abcdef012", "type": "commit"}}`)
+					if err != nil {
+						return
+					}
 				default:
 					http.Error(w, "not found", http.StatusNotFound)
 				}
@@ -355,8 +389,8 @@ func TestDefaultVersionChecker_IsUpdateAvailable(t *testing.T) {
 
 			// Create a client that points to the test server
 			client := github.NewClient(nil)
-			url, _ := url.Parse(server.URL + "/")
-			client.BaseURL = url
+			parseURL, _ := url.Parse(server.URL + "/")
+			client.BaseURL = parseURL
 
 			checker := &DefaultVersionChecker{client: client}
 
@@ -386,8 +420,8 @@ func TestDefaultVersionChecker_GetCommitHash(t *testing.T) {
 	defer server.Close()
 
 	client := github.NewClient(nil)
-	url, _ := url.Parse(server.URL + "/")
-	client.BaseURL = url
+	parseURL, _ := url.Parse(server.URL + "/")
+	client.BaseURL = parseURL
 
 	checker := &DefaultVersionChecker{client: client}
 
@@ -409,13 +443,16 @@ func TestDefaultVersionChecker_GetCommitHash(t *testing.T) {
 			setupMocks: func(mux *http.ServeMux, action ActionReference) {
 				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/v1.0.0", action.Owner, action.Name),
 					func(w http.ResponseWriter, r *http.Request) {
-						fmt.Fprintf(w, `{
+						_, err := fmt.Fprintf(w, `{
 							"ref": "refs/tags/v1.0.0",
 							"object": {
 								"sha": "abc123",
 								"type": "commit"
 							}
 						}`)
+						if err != nil {
+							return
+						}
 					})
 			},
 			wantHash: "abc123",
@@ -431,23 +468,29 @@ func TestDefaultVersionChecker_GetCommitHash(t *testing.T) {
 			setupMocks: func(mux *http.ServeMux, action ActionReference) {
 				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/v2.0.0", action.Owner, action.Name),
 					func(w http.ResponseWriter, r *http.Request) {
-						fmt.Fprintf(w, `{
+						_, err := fmt.Fprintf(w, `{
 							"ref": "refs/tags/v2.0.0",
 							"object": {
 								"sha": "tag123",
 								"type": "tag"
 							}
 						}`)
+						if err != nil {
+							return
+						}
 					})
 				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/tags/tag123", action.Owner, action.Name),
 					func(w http.ResponseWriter, r *http.Request) {
-						fmt.Fprintf(w, `{
+						_, err := fmt.Fprintf(w, `{
 							"sha": "tag123",
 							"object": {
 								"sha": "commit123",
 								"type": "commit"
 							}
 						}`)
+						if err != nil {
+							return
+						}
 					})
 			},
 			wantHash: "commit123",
@@ -478,7 +521,10 @@ func TestDefaultVersionChecker_GetCommitHash(t *testing.T) {
 			setupMocks: func(mux *http.ServeMux, action ActionReference) {
 				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/v4.0.0", action.Owner, action.Name),
 					func(w http.ResponseWriter, r *http.Request) {
-						fmt.Fprintf(w, `{"ref": "refs/tags/v4.0.0"}`)
+						_, err := fmt.Fprintf(w, `{"ref": "refs/tags/v4.0.0"}`)
+						if err != nil {
+							return
+						}
 					})
 			},
 			wantErr: true,
@@ -493,12 +539,15 @@ func TestDefaultVersionChecker_GetCommitHash(t *testing.T) {
 			setupMocks: func(mux *http.ServeMux, action ActionReference) {
 				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/v5.0.0", action.Owner, action.Name),
 					func(w http.ResponseWriter, r *http.Request) {
-						fmt.Fprintf(w, `{
+						_, err := fmt.Fprintf(w, `{
 							"ref": "refs/tags/v5.0.0",
 							"object": {
 								"type": "commit"
 							}
 						}`)
+						if err != nil {
+							return
+						}
 					})
 			},
 			wantErr: true,
@@ -513,13 +562,16 @@ func TestDefaultVersionChecker_GetCommitHash(t *testing.T) {
 			setupMocks: func(mux *http.ServeMux, action ActionReference) {
 				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/v6.0.0", action.Owner, action.Name),
 					func(w http.ResponseWriter, r *http.Request) {
-						fmt.Fprintf(w, `{
+						_, err := fmt.Fprintf(w, `{
 							"ref": "refs/tags/v6.0.0",
 							"object": {
 								"sha": "tag456",
 								"type": "tag"
 							}
 						}`)
+						if err != nil {
+							return
+						}
 					})
 				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/tags/tag456", action.Owner, action.Name),
 					func(w http.ResponseWriter, r *http.Request) {
@@ -538,17 +590,23 @@ func TestDefaultVersionChecker_GetCommitHash(t *testing.T) {
 			setupMocks: func(mux *http.ServeMux, action ActionReference) {
 				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/v7.0.0", action.Owner, action.Name),
 					func(w http.ResponseWriter, r *http.Request) {
-						fmt.Fprintf(w, `{
+						_, err := fmt.Fprintf(w, `{
 							"ref": "refs/tags/v7.0.0",
 							"object": {
 								"sha": "tag789",
 								"type": "tag"
 							}
 						}`)
+						if err != nil {
+							return
+						}
 					})
 				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/tags/tag789", action.Owner, action.Name),
 					func(w http.ResponseWriter, r *http.Request) {
-						fmt.Fprintf(w, `{"sha": "tag789"}`)
+						_, err := fmt.Fprintf(w, `{"sha": "tag789"}`)
+						if err != nil {
+							return
+						}
 					})
 			},
 			wantErr: true,

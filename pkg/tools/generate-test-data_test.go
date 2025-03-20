@@ -12,6 +12,9 @@ import (
 )
 
 func TestWorkflowGeneration(t *testing.T) {
+	// Set test mode flag to avoid Stdout.Sync errors
+	inTestMode = true
+
 	tests := []struct {
 		name          string
 		workflowCount int
@@ -66,7 +69,12 @@ func TestWorkflowGeneration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create test directory: %v", err)
 			}
-			defer os.RemoveAll(testDir)
+			defer func(path string) {
+				err := os.RemoveAll(path)
+				if err != nil {
+					t.Fatalf("Failed to remove temp dir: %v", err)
+				}
+			}(testDir)
 
 			// Create workflow directory structure
 			workflowDir := filepath.Join(testDir, ".github", "workflows")
@@ -132,6 +140,9 @@ func TestWorkflowGeneration(t *testing.T) {
 }
 
 func TestInvalidArguments(t *testing.T) {
+	// Set test mode flag to avoid Stdout.Sync errors
+	inTestMode = true
+
 	tests := []struct {
 		name    string
 		args    []string
@@ -150,7 +161,7 @@ func TestInvalidArguments(t *testing.T) {
 		{
 			name:    "invalid workflow count",
 			args:    []string{"cmd", "output-dir", "invalid"},
-			wantErr: "Error parsing count",
+			wantErr: "invalid test parameters: workflow count",
 		},
 		{
 			name:    "negative workflow count",
@@ -165,12 +176,12 @@ func TestInvalidArguments(t *testing.T) {
 		{
 			name:    "non-numeric workflow count",
 			args:    []string{"cmd", "output-dir", "abc"},
-			wantErr: "Error parsing count",
+			wantErr: "invalid test parameters: workflow count",
 		},
 		{
 			name:    "float workflow count",
 			args:    []string{"cmd", "output-dir", "1.5"},
-			wantErr: "Error parsing count",
+			wantErr: "invalid test parameters: workflow count",
 		},
 	}
 
@@ -191,6 +202,9 @@ func TestInvalidArguments(t *testing.T) {
 }
 
 func TestTemplateValidity(t *testing.T) {
+	// Set test mode flag to avoid Stdout.Sync errors
+	inTestMode = true
+
 	// Test template execution with various data
 	tests := []struct {
 		name        string
@@ -275,6 +289,9 @@ jobs:
 }
 
 func TestActionSelection(t *testing.T) {
+	// Set test mode flag to avoid Stdout.Sync errors
+	inTestMode = true
+
 	// Test action selection boundaries
 	t.Run("action count range", func(t *testing.T) {
 		for i := 1; i <= 10; i++ {

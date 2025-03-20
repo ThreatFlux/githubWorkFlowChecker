@@ -77,7 +77,7 @@ func ReadFileWithOptions(path string, options FileOptions) ([]byte, error) {
 	// Validate the path if BaseDir is provided
 	if options.BaseDir != "" {
 		if err := ValidatePath(options.BaseDir, path, options.ValidateOptions); err != nil {
-			return nil, fmt.Errorf("invalid file path: %w", err)
+			return nil, fmt.Errorf(ErrInvalidFilePath, err)
 		}
 	}
 
@@ -85,7 +85,7 @@ func ReadFileWithOptions(path string, options FileOptions) ([]byte, error) {
 	// #nosec G304 - path is validated above
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("error reading file: %w", err)
+		return nil, fmt.Errorf(ErrReadingFile, err)
 	}
 
 	return content, nil
@@ -110,7 +110,7 @@ func WriteFileWithOptions(path string, data []byte, options FileOptions) error {
 	// Validate the path if BaseDir is provided
 	if options.BaseDir != "" {
 		if err := ValidatePath(options.BaseDir, path, options.ValidateOptions); err != nil {
-			return fmt.Errorf("invalid file path: %w", err)
+			return fmt.Errorf(ErrInvalidFilePath, err)
 		}
 	}
 
@@ -118,7 +118,7 @@ func WriteFileWithOptions(path string, data []byte, options FileOptions) error {
 	if options.CreateDirs {
 		dir := filepath.Dir(path)
 		if err := os.MkdirAll(dir, 0750); err != nil {
-			return fmt.Errorf("error creating directories: %w", err)
+			return fmt.Errorf(ErrCreatingDirectories, err)
 		}
 	}
 
@@ -127,14 +127,14 @@ func WriteFileWithOptions(path string, data []byte, options FileOptions) error {
 	if err := os.WriteFile(tempFile, data, options.Mode); err != nil {
 		// Clean up the temporary file if write fails
 		_ = os.Remove(tempFile)
-		return fmt.Errorf("error writing temporary file: %w", err)
+		return fmt.Errorf(ErrWritingTempFile, err)
 	}
 
 	// Rename the temporary file to the target file (atomic operation)
 	if err := os.Rename(tempFile, path); err != nil {
 		// Clean up the temporary file if rename fails
 		_ = os.Remove(tempFile)
-		return fmt.Errorf("error replacing original file: %w", err)
+		return fmt.Errorf(ErrReplacingOriginalFile, err)
 	}
 
 	return nil
@@ -191,7 +191,7 @@ func FindFilesWithExtension(dir string, ext string) ([]string, error) {
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("error scanning directory: %w", err)
+		return nil, fmt.Errorf(ErrScanningDirectory, err)
 	}
 
 	return files, nil
@@ -204,28 +204,38 @@ func CopyFile(src, dst string) error {
 	// #nosec G304 - path is validated above
 	srcFile, err := os.Open(src)
 	if err != nil {
-		return fmt.Errorf("error opening source file: %w", err)
+		return fmt.Errorf(ErrOpeningSourceFile, err)
 	}
-	defer srcFile.Close()
+	defer func(srcFile *os.File) {
+		err := srcFile.Close()
+		if err != nil {
+			fmt.Printf("error closing source file: %v\n", err)
+		}
+	}(srcFile)
 
 	// Create the destination file
 	// #nosec G304 - path is validated above
 	dstFile, err := os.Create(dst)
 	if err != nil {
-		return fmt.Errorf("error creating destination file: %w", err)
+		return fmt.Errorf(ErrCreatingDestFile, err)
 	}
-	defer dstFile.Close()
+	defer func(dstFile *os.File) {
+		err := dstFile.Close()
+		if err != nil {
+			fmt.Printf("error closing destination file: %v\n", err)
+		}
+	}(dstFile)
 
 	// Copy the contents
 	_, err = io.Copy(dstFile, srcFile)
 	if err != nil {
-		return fmt.Errorf("error copying file contents: %w", err)
+		return fmt.Errorf(ErrCopyingFileContents, err)
 	}
 
 	// Sync to ensure the file is written to disk
 	err = dstFile.Sync()
 	if err != nil {
-		return fmt.Errorf("error syncing file: %w", err)
+		return fmt.Errorf(ErrSyncingFile, err)
 	}
 
 	return nil
@@ -254,13 +264,18 @@ func AppendToFile(path string, data []byte) error {
 	// #nosec G304 - path is validated above
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
-		return fmt.Errorf("error opening file for append: %w", err)
+		return fmt.Errorf(ErrOpeningFileForAppend, err)
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			fmt.Printf("error closing file: %v\n", err)
+		}
+	}(f)
 
 	// Write the data
 	if _, err := f.Write(data); err != nil {
-		return fmt.Errorf("error appending to file: %w", err)
+		return fmt.Errorf(ErrAppendingToFile, err)
 	}
 
 	return nil

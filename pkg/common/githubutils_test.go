@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -205,7 +206,7 @@ func TestExecuteWithRetry(t *testing.T) {
 		return nil, context.Canceled
 	})
 
-	if err == nil || err != context.Canceled {
+	if err == nil || !errors.Is(err, context.Canceled) {
 		t.Errorf("Expected context.Canceled error, got %v", err)
 	}
 }

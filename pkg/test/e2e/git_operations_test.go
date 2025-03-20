@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 )
 
 func TestGitOperations(t *testing.T) {
@@ -24,14 +26,14 @@ func TestGitOperations(t *testing.T) {
 				// Corrupt git config
 				gitConfigPath := filepath.Join(repoPath, ".git", "config")
 				if err := os.WriteFile(gitConfigPath, []byte("invalid git config"), 0644); err != nil {
-					t.Fatalf("Failed to corrupt git config: %v", err)
+					t.Fatalf(common.ErrFailedToCorruptGitConfig, err)
 				}
 
 				// Attempt git operation with corrupted config
 				cmd := env.createCommand("git", "status")
 				cmd.Dir = repoPath
 				if err := cmd.Run(); err == nil {
-					t.Error("Expected error with corrupted git config, got nil")
+					t.Error(common.ErrExpectedGitConfigError)
 				}
 			},
 		},
@@ -49,45 +51,45 @@ func TestGitOperations(t *testing.T) {
 				cmd := env.createCommand("git", "checkout", "-b", branchName)
 				cmd.Dir = repoPath
 				if err := cmd.Run(); err != nil {
-					t.Fatalf("Failed to create branch: %v", err)
+					t.Fatalf(common.ErrFailedToCreateBranch, err)
 				}
 
 				// Make some changes
 				workflowFile := filepath.Join(repoPath, ".github", "workflows", "test.yml")
 				if err := os.WriteFile(workflowFile, []byte("invalid: content"), 0644); err != nil {
-					t.Fatalf("Failed to write file: %v", err)
+					t.Fatalf(common.ErrFailedToWriteFile, err)
 				}
 
 				// Stage and commit the changes
 				cmd = env.createCommand("git", "add", workflowFile)
 				cmd.Dir = repoPath
 				if err := cmd.Run(); err != nil {
-					t.Fatalf("Failed to stage changes: %v", err)
+					t.Fatalf(common.ErrFailedToStageChanges, err)
 				}
 
 				cmd = env.createCommand("git", "commit", "-m", "test commit")
 				cmd.Dir = repoPath
 				if err := cmd.Run(); err != nil {
-					t.Fatalf("Failed to commit changes: %v", err)
+					t.Fatalf(common.ErrFailedToCommitChanges, err)
 				}
 
 				// Add a non-existent remote
 				cmd = env.createCommand("git", "remote", "add", "invalid", "https://invalid-remote/repo.git")
 				cmd.Dir = repoPath
 				if err := cmd.Run(); err != nil {
-					t.Fatalf("Failed to add remote: %v", err)
+					t.Fatalf(common.ErrFailedToAddRemote, err)
 				}
 
 				// Try to push to non-existent remote
 				cmd = env.createCommand("git", "push", "invalid", branchName)
 				cmd.Dir = repoPath
 				if output, err := cmd.CombinedOutput(); err == nil {
-					t.Error("Expected error when pushing to non-existent remote, got nil")
+					t.Error(common.ErrExpectedPushError)
 				} else {
 					// Verify error message
 					errStr := string(output)
 					if !strings.Contains(errStr, "Could not resolve host") && !strings.Contains(errStr, "failed to push") {
-						t.Errorf("Unexpected error message: %s", errStr)
+						t.Errorf(common.ErrUnexpectedErrorMessage, errStr)
 					}
 				}
 			},
@@ -105,7 +107,7 @@ func TestGitOperations(t *testing.T) {
 				cmd := env.createCommand("git", "commit", "-m", "test commit")
 				cmd.Dir = repoPath
 				if err := cmd.Run(); err == nil {
-					t.Error("Expected error when committing without staged changes, got nil")
+					t.Error(common.ErrExpectedCommitError)
 				}
 			},
 		},
@@ -122,12 +124,12 @@ func TestGitOperations(t *testing.T) {
 				cmd := env.createCommand("git", "checkout", "-b", "invalid branch/name*&^%")
 				cmd.Dir = repoPath
 				if output, err := cmd.CombinedOutput(); err == nil {
-					t.Error("Expected error when creating branch with invalid name, got nil")
+					t.Error(common.ErrExpectedBranchError)
 				} else {
 					// Verify error message
 					errStr := string(output)
 					if !strings.Contains(errStr, "fatal: '") {
-						t.Errorf("Unexpected error message: %s", errStr)
+						t.Errorf(common.ErrUnexpectedErrorMessage, errStr)
 					}
 				}
 			},
@@ -146,56 +148,56 @@ func TestGitOperations(t *testing.T) {
 				cmd := env.createCommand("git", "checkout", "-b", branchName)
 				cmd.Dir = repoPath
 				if err := cmd.Run(); err != nil {
-					t.Fatalf("Failed to create branch: %v", err)
+					t.Fatalf(common.ErrFailedToCreateBranch, err)
 				}
 
 				// Make conflicting changes
 				workflowFile := filepath.Join(repoPath, ".github", "workflows", "test.yml")
 				if err := os.WriteFile(workflowFile, []byte("conflict: content"), 0644); err != nil {
-					t.Fatalf("Failed to write file: %v", err)
+					t.Fatalf(common.ErrFailedToWriteFile, err)
 				}
 
 				// Stage and commit changes
 				cmd = env.createCommand("git", "add", ".")
 				cmd.Dir = repoPath
 				if err := cmd.Run(); err != nil {
-					t.Fatalf("Failed to stage changes: %v", err)
+					t.Fatalf(common.ErrFailedToStageChanges, err)
 				}
 
 				cmd = env.createCommand("git", "commit", "-m", "test commit")
 				cmd.Dir = repoPath
 				if err := cmd.Run(); err != nil {
-					t.Fatalf("Failed to commit changes: %v", err)
+					t.Fatalf(common.ErrFailedToCommitChanges, err)
 				}
 
 				// Switch back to main and make conflicting changes
 				cmd = env.createCommand("git", "checkout", "main")
 				cmd.Dir = repoPath
 				if err := cmd.Run(); err != nil {
-					t.Fatalf("Failed to switch branch: %v", err)
+					t.Fatalf(common.ErrFailedToSwitchBranch, err)
 				}
 
 				if err := os.WriteFile(workflowFile, []byte("different: content"), 0644); err != nil {
-					t.Fatalf("Failed to write file: %v", err)
+					t.Fatalf(common.ErrFailedToWriteFile, err)
 				}
 
 				cmd = env.createCommand("git", "add", ".")
 				cmd.Dir = repoPath
 				if err := cmd.Run(); err != nil {
-					t.Fatalf("Failed to stage changes: %v", err)
+					t.Fatalf(common.ErrFailedToStageChanges, err)
 				}
 
 				cmd = env.createCommand("git", "commit", "-m", "conflicting commit")
 				cmd.Dir = repoPath
 				if err := cmd.Run(); err != nil {
-					t.Fatalf("Failed to commit changes: %v", err)
+					t.Fatalf(common.ErrFailedToCommitChanges, err)
 				}
 
 				// Try to merge branches with conflicts
 				cmd = env.createCommand("git", "merge", branchName)
 				cmd.Dir = repoPath
 				if err := cmd.Run(); err == nil {
-					t.Error("Expected error when merging conflicting branches, got nil")
+					t.Error(common.ErrExpectedMergeError)
 				}
 			},
 		},

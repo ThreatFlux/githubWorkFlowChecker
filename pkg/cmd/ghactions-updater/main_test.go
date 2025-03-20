@@ -1117,6 +1117,7 @@ func TestValidateFlags(t *testing.T) {
 			envVars: map[string]string{
 				"GITHUB_TOKEN": "",
 			},
+			wantErr: false, // Should not error now that we allow empty tokens
 		},
 		{
 			name: "custom workflows path",

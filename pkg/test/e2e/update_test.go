@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 )
 
 func TestSetupTestEnvWithoutToken(t *testing.T) {
@@ -33,17 +35,17 @@ func TestSetupTestEnvSuccess(t *testing.T) {
 	// Verify work directory exists and has correct permissions
 	info, err := os.Stat(workDir)
 	if err != nil {
-		t.Errorf("Work directory not created: %v", err)
+		t.Errorf(common.ErrWorkDirNotCreated, err)
 	}
 	if info.Mode().Perm() != 0700 {
-		t.Errorf("Work directory has wrong permissions: got %v, want %v", info.Mode().Perm(), 0700)
+		t.Errorf(common.ErrWrongDirectoryPermissions, info.Mode().Perm(), 0700)
 	}
 
 	env.cleanup()
 
 	// Verify cleanup
 	if _, err := os.Stat(workDir); !os.IsNotExist(err) {
-		t.Error("Work directory not cleaned up properly")
+		t.Error(common.ErrWorkDirNotCleanedUp)
 	}
 }
 
@@ -120,7 +122,7 @@ func TestCloneTestRepo(t *testing.T) {
 					return fmt.Errorf("failed to create invalid directory: %v", err)
 				}
 				if err := os.Chmod(invalidDir, 0000); err != nil {
-					return fmt.Errorf("failed to change directory permissions: %v", err)
+					return fmt.Errorf(common.ErrFailedToChangePermissions, err)
 				}
 
 				// Try to clone into the invalid directory
@@ -137,7 +139,7 @@ func TestCloneTestRepo(t *testing.T) {
 				// This should fail due to permissions
 				repoPath := filepath.Join(invalidDir, "test-repo")
 				if err := os.MkdirAll(repoPath, 0700); err != nil {
-					return fmt.Errorf("failed to create repo directory: %v", err)
+					return fmt.Errorf(common.ErrFailedToCreateRepoDir, err)
 				}
 
 				return nil
@@ -152,14 +154,14 @@ func TestCloneTestRepo(t *testing.T) {
 				// Verify repository structure
 				workflowPath := filepath.Join(repoPath, ".github", "workflows", "test.yml")
 				if _, err := os.Stat(workflowPath); os.IsNotExist(err) {
-					return fmt.Errorf("workflow file not created")
+					return fmt.Errorf(common.ErrWorkflowFileNotFound, workflowPath)
 				}
 
 				// Verify git configuration
 				gitConfigPath := filepath.Join(repoPath, ".git", "config")
 				configContent, err := os.ReadFile(gitConfigPath)
 				if err != nil {
-					return fmt.Errorf("failed to read git config: %v", err)
+					return fmt.Errorf(common.ErrFailedToReadGitConfig, err)
 				}
 
 				expectedConfigs := []string{
@@ -169,7 +171,7 @@ func TestCloneTestRepo(t *testing.T) {
 
 				for _, expected := range expectedConfigs {
 					if !strings.Contains(string(configContent), expected) {
-						return fmt.Errorf("git config missing expected value: %s", expected)
+						return fmt.Errorf(common.ErrGitConfigMissingValue, expected)
 					}
 				}
 
@@ -192,14 +194,14 @@ func TestCloneTestRepo(t *testing.T) {
 
 				// Verify both repos exist and are different
 				if repoPath1 == repoPath2 {
-					return fmt.Errorf("expected different repo paths for separate clones")
+					return fmt.Errorf(common.ErrExpectedDifferentPaths)
 				}
 
 				// Verify both repos have the workflow file
 				for _, path := range []string{repoPath1, repoPath2} {
 					workflowPath := filepath.Join(path, ".github", "workflows", "test.yml")
 					if _, err := os.Stat(workflowPath); os.IsNotExist(err) {
-						return fmt.Errorf("workflow file not found in %s", path)
+						return fmt.Errorf(common.ErrWorkflowFileNotFound, path)
 					}
 				}
 
@@ -218,11 +220,11 @@ func TestCloneTestRepo(t *testing.T) {
 
 			if tt.wantErr {
 				if err == nil {
-					t.Error("Expected an error but got none")
+					t.Errorf(common.ErrExpectedError, "an error")
 				}
 			} else {
 				if err != nil {
-					t.Errorf("Unexpected error: %v", err)
+					t.Errorf(common.ErrUnexpectedError, err)
 				}
 			}
 		})
@@ -240,21 +242,21 @@ func TestWorkflowFileCreation(t *testing.T) {
 	expectedPerm := os.FileMode(0644)
 	err := os.Chmod(workflowPath, 0644)
 	if err != nil {
-		t.Errorf("Failed to change workflow file permissions: %v", err)
+		t.Errorf(common.ErrFailedToChangeFilePermissions, err)
 	}
 	info, err := os.Stat(workflowPath)
 	if err != nil {
-		t.Fatalf("Failed to stat workflow file: %v", err)
+		t.Fatalf(common.ErrFailedToStatFile, err)
 	}
 	actualPerm := info.Mode().Perm()
 	if actualPerm != expectedPerm {
-		t.Errorf("Workflow file has wrong permissions: got %v, want %v", actualPerm, expectedPerm)
+		t.Errorf(common.ErrWrongDirectoryPermissions, actualPerm, expectedPerm)
 	}
 
 	// Test workflow file content
 	content, err := os.ReadFile(workflowPath)
 	if err != nil {
-		t.Fatalf("Failed to read workflow file: %v", err)
+		t.Fatalf("error reading file: %v", err)
 	}
 
 	expectedContent := []string{
@@ -270,7 +272,7 @@ func TestWorkflowFileCreation(t *testing.T) {
 	contentStr := string(content)
 	for _, expected := range expectedContent {
 		if !strings.Contains(contentStr, expected) {
-			t.Errorf("Workflow file missing expected content: %s\nActual content:\n%s", expected, contentStr)
+			t.Errorf(common.ErrWorkflowMissingContent, expected)
 		}
 	}
 }

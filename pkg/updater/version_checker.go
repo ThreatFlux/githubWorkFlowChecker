@@ -47,14 +47,14 @@ func (c *DefaultVersionChecker) GetLatestVersion(ctx context.Context, action Act
 		}
 		tags, _, err := c.client.Repositories.ListTags(ctx, action.Owner, action.Name, opts)
 		if err != nil {
-			return "", "", fmt.Errorf("error getting tags: %w", err)
+			return "", "", fmt.Errorf(common.ErrGettingTags, err)
 		}
 		if len(tags) == 0 || tags[0].Name == nil {
-			return "", "", fmt.Errorf("no version information found for %s/%s", action.Owner, action.Name)
+			return "", "", fmt.Errorf(common.ErrNoVersionInfo, action.Owner, action.Name)
 		}
 		tagName = *tags[0].Name
 	} else {
-		return "", "", fmt.Errorf("no version information found for %s/%s", action.Owner, action.Name)
+		return "", "", fmt.Errorf(common.ErrNoVersionInfo, action.Owner, action.Name)
 	}
 
 	// Get the commit hash for the tag
@@ -96,21 +96,21 @@ func (c *DefaultVersionChecker) GetCommitHash(ctx context.Context, action Action
 	// Get the commit hash for the tag/version
 	ref, _, err := c.client.Git.GetRef(ctx, action.Owner, action.Name, "tags/"+version)
 	if err != nil {
-		return "", fmt.Errorf("error getting ref for tag %s: %w", version, err)
+		return "", fmt.Errorf(common.ErrGettingRefForTag, version, err)
 	}
 
 	if ref.Object == nil || ref.Object.SHA == nil {
-		return "", fmt.Errorf("no commit hash found for tag %s", version)
+		return "", fmt.Errorf(common.ErrNoCommitHashForTag, version)
 	}
 
 	// If the tag points to an annotated tag object, we need to get the commit it points to
 	if ref.Object.Type != nil && *ref.Object.Type == "tag" {
 		tag, _, err := c.client.Git.GetTag(ctx, action.Owner, action.Name, *ref.Object.SHA)
 		if err != nil {
-			return "", fmt.Errorf("error getting annotated tag %s: %w", version, err)
+			return "", fmt.Errorf(common.ErrGettingAnnotatedTag, version, err)
 		}
 		if tag.Object == nil || tag.Object.SHA == nil {
-			return "", fmt.Errorf("no commit hash found in annotated tag %s", version)
+			return "", fmt.Errorf(common.ErrNoCommitHashInTag, version)
 		}
 		return *tag.Object.SHA, nil
 	}

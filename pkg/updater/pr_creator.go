@@ -63,12 +63,12 @@ func (c *DefaultPRCreator) CreatePR(ctx context.Context, updates []*Update) erro
 	// Create a new branch for the updates
 	branchName := fmt.Sprintf("action-updates-%s", time.Now().Format("20060102-150405"))
 	if err := c.createBranch(ctx, branchName); err != nil {
-		return fmt.Errorf("error creating branch: %w", err)
+		return fmt.Errorf(common.ErrCreatingBranch, err)
 	}
 
 	// Create commit with all updates
 	if err := c.createCommit(ctx, branchName, updates); err != nil {
-		return fmt.Errorf("error creating commit: %w", err)
+		return fmt.Errorf(common.ErrCreatingCommit, err)
 	}
 
 	// Create pull request
@@ -83,7 +83,7 @@ func (c *DefaultPRCreator) CreatePR(ctx context.Context, updates []*Update) erro
 	})
 
 	if err != nil {
-		return fmt.Errorf("error creating pull request: %w", err)
+		return fmt.Errorf(common.ErrCreatingPR, err)
 	}
 
 	// Add labels if PR was created successfully
@@ -92,7 +92,7 @@ func (c *DefaultPRCreator) CreatePR(ctx context.Context, updates []*Update) erro
 			[]string{"dependencies", "automated-pr"})
 		if err != nil {
 			// Don't fail if we couldn't add labels
-			fmt.Printf("Warning: could not add labels to PR: %v\n", err)
+			fmt.Printf("Warning: %v\n", err)
 		}
 	}
 
@@ -104,13 +104,13 @@ func (c *DefaultPRCreator) createBranch(ctx context.Context, branchName string) 
 	// Get the default branch's latest commit
 	repo, _, err := c.client.Repositories.Get(ctx, c.owner, c.repo)
 	if err != nil {
-		return fmt.Errorf("error getting repository: %w", err)
+		return fmt.Errorf(common.ErrGettingRepository, err)
 	}
 
 	defaultBranch := repo.GetDefaultBranch()
 	ref, _, err := c.client.Git.GetRef(ctx, c.owner, c.repo, "refs/heads/"+defaultBranch)
 	if err != nil {
-		return fmt.Errorf("error getting default branch ref: %w", err)
+		return fmt.Errorf(common.ErrGettingDefaultBranchRef, err)
 	}
 
 	// Create new branch
@@ -164,14 +164,14 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 					Content: github.String(""),
 				}
 			} else {
-				return fmt.Errorf("error getting file contents: %w", err)
+				return fmt.Errorf(common.ErrGettingFileContents, err)
 			}
 		}
 
 		// Apply updates to content
 		fileContent, err := content.GetContent()
 		if err != nil {
-			return fmt.Errorf("error decoding content: %w", err)
+			return fmt.Errorf(common.ErrDecodingContent, err)
 		}
 
 		lines := strings.Split(fileContent, "\n")
@@ -243,7 +243,7 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 			Encoding: github.String("utf-8"),
 		})
 		if err != nil {
-			return fmt.Errorf("error creating blob: %w", err)
+			return fmt.Errorf(common.ErrCreatingBlob, err)
 		}
 
 		// Ensure path doesn't start with a slash
@@ -260,13 +260,13 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 	// Get the branch's latest commit
 	ref, _, err := c.client.Git.GetRef(ctx, c.owner, c.repo, "refs/heads/"+branch)
 	if err != nil {
-		return fmt.Errorf("error getting branch ref: %w", err)
+		return fmt.Errorf(common.ErrGettingBranchRef, err)
 	}
 
 	// Create tree
 	tree, _, err := c.client.Git.CreateTree(ctx, c.owner, c.repo, *ref.Object.SHA, entries)
 	if err != nil {
-		return fmt.Errorf("error creating tree: %w", err)
+		return fmt.Errorf(common.ErrCreatingTree, err)
 	}
 
 	// Create commit
@@ -276,7 +276,7 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 		Parents: []*github.Commit{{SHA: ref.Object.SHA}},
 	}, &github.CreateCommitOptions{})
 	if err != nil {
-		return fmt.Errorf("error creating commit: %w", err)
+		return fmt.Errorf(common.ErrCreatingCommit, err)
 	}
 
 	// Update branch reference
