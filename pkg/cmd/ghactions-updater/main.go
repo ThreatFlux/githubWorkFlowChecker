@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/updater"
 )
 
@@ -35,16 +36,16 @@ func validateFlags() error {
 	}
 
 	if *owner == "" {
-		return fmt.Errorf("owner is required")
+		return fmt.Errorf(common.ErrMissingRequiredFlag, "owner")
 	}
 	if *repo == "" {
-		return fmt.Errorf("repo-name is required")
+		return fmt.Errorf(common.ErrMissingRequiredFlag, "repo-name")
 	}
 	if *token == "" {
 		// Try to get token from environment
 		*token = os.Getenv("GITHUB_TOKEN")
 		if *token == "" {
-			log.Printf("No GitHub token provided. Using public GitHub API with rate limiting. For higher rate limits, provide a token via -token flag or GITHUB_TOKEN environment variable.")
+			log.Printf(common.ErrNoGithubToken)
 			// Allow empty token - the client will use unauthenticated access
 		}
 	}
@@ -56,7 +57,7 @@ func validateFlags() error {
 
 	// Validate that dry-run and stage are not both set
 	if *dryRun && *stage {
-		return fmt.Errorf("cannot use both -dry-run and -stage flags simultaneously")
+		return fmt.Errorf(common.ErrInvalidFlagValue, "dry-run/stage", "cannot use both flags simultaneously")
 	}
 
 	return nil
@@ -75,7 +76,7 @@ func run() error {
 	// Convert repo path to absolute path
 	absPath, err := absFunc(*repoPath)
 	if err != nil {
-		return fmt.Errorf("failed to get absolute path: %v", err)
+		return fmt.Errorf(common.ErrCommandExecution, err)
 	}
 
 	// Create scanner with base directory set to repository root
@@ -85,11 +86,11 @@ func run() error {
 	workflowsDir := filepath.Join(absPath, *workflowsPath)
 	files, err := scanner.ScanWorkflows(workflowsDir)
 	if err != nil {
-		return fmt.Errorf("failed to scan workflows at %s: %v", *workflowsPath, err)
+		return fmt.Errorf(common.ErrReadingUpdateFile, err)
 	}
 
 	if len(files) == 0 {
-		log.Println("No workflow files found")
+		log.Println(common.ErrNoWorkflowsFound)
 		return nil
 	}
 
@@ -113,7 +114,7 @@ func run() error {
 		// Get action references from file
 		refs, err := scanner.ParseActionReferences(file)
 		if err != nil {
-			log.Printf("Failed to parse %s: %v", file, err)
+			log.Printf(common.ErrFailedToParseWorkflow, file, err)
 			continue
 		}
 
@@ -121,21 +122,21 @@ func run() error {
 		for _, ref := range refs {
 			latestVersion, latestHash, err := checker.GetLatestVersion(ctx, ref)
 			if err != nil {
-				log.Printf("Failed to check %s/%s: %v", ref.Owner, ref.Name, err)
+				log.Printf(common.ErrFailedToCheckAction, ref.Owner, ref.Name, err)
 				continue
 			}
 
 			// Check if update is available
 			available, _, _, err := checker.IsUpdateAvailable(ctx, ref)
 			if err != nil {
-				log.Printf("Failed to check update availability for %s/%s: %v", ref.Owner, ref.Name, err)
+				log.Printf(common.ErrFailedToCheckUpdate, ref.Owner, ref.Name, err)
 				continue
 			}
 
 			if available {
 				update, err := manager.CreateUpdate(ctx, file, ref, latestVersion, latestHash)
 				if err != nil {
-					log.Printf("Failed to create update for %s/%s: %v", ref.Owner, ref.Name, err)
+					log.Printf(common.ErrFailedToCreateUpdate, ref.Owner, ref.Name, err)
 					continue
 				}
 				updates = append(updates, update)
@@ -144,7 +145,7 @@ func run() error {
 	}
 
 	if len(updates) == 0 {
-		log.Println("No updates available")
+		log.Println(common.ErrNoUpdatesAvailable)
 		return nil
 	}
 
@@ -163,13 +164,13 @@ func run() error {
 	} else if *stage {
 		// Apply changes locally without creating a PR
 		if err := manager.ApplyUpdates(ctx, updates); err != nil {
-			return fmt.Errorf("failed to apply updates locally: %v", err)
+			return fmt.Errorf(common.ErrApplyingUpdates, err)
 		}
 		fmt.Printf("Applied %d updates locally to %d files\n", len(updates), countUniqueFiles(updates))
 	} else {
 		// Normal mode: Create pull request with updates
 		if err := creator.CreatePR(ctx, updates); err != nil {
-			return fmt.Errorf("failed to create pull request: %v", err)
+			return fmt.Errorf(common.ErrCreatingPR, err)
 		}
 		fmt.Printf("Created pull request with %d updates\n", len(updates))
 	}

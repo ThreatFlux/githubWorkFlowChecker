@@ -51,6 +51,8 @@ func NewGitHubClient(options GitHubClientOptions) *github.Client {
 		client, err = client.WithEnterpriseURLs(options.BaseURL, options.BaseURL)
 		if err != nil {
 			// Fall back to the default client if enterprise URL is invalid
+			// Use %v instead of %w for error printing
+			fmt.Printf("invalid enterprise URL: %v\n", err)
 			client = github.NewClient(httpClient)
 		}
 	}
@@ -120,14 +122,14 @@ func (h *RateLimitHandler) HandleRateLimit(resp *github.Response, err error) boo
 // GetRateLimitInfo returns information about the current rate limit
 func (h *RateLimitHandler) GetRateLimitInfo() string {
 	if h.lastResponse == nil {
-		return "No rate limit information available"
+		return ErrNoRateLimitInfo
 	}
 
 	rate := h.lastResponse.Rate
 	resetTime := rate.Reset.Time
 	waitTime := time.Until(resetTime)
 
-	return fmt.Sprintf("Rate limit: %d/%d, resets in %s",
+	return fmt.Sprintf(ErrRateLimitFormat,
 		rate.Remaining, rate.Limit, waitTime.Round(time.Second))
 }
 
@@ -141,6 +143,21 @@ func ExecuteWithRetry(ctx context.Context, client *github.Client, maxRetries int
 		resp, err := fn()
 
 		if !handler.HandleRateLimit(resp, err) {
+			// Check if it's a rate limit error
+			if resp != nil && resp.StatusCode == http.StatusForbidden && resp.Rate.Remaining == 0 {
+				return fmt.Errorf(ErrRateLimitExceeded, err)
+			}
+
+			// Check if it's a network error
+			if err != nil && (resp == nil || resp.StatusCode >= 500) {
+				return fmt.Errorf(ErrNetworkFailure, err)
+			}
+
+			// Check if it's an authentication error
+			if resp != nil && resp.StatusCode == http.StatusUnauthorized {
+				return fmt.Errorf(ErrAuthentication, err)
+			}
+
 			return err
 		}
 

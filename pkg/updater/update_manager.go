@@ -22,7 +22,7 @@ type DefaultUpdateManager struct {
 // validatePath ensures the path is within the allowed directory and has proper permissions
 func (m *DefaultUpdateManager) validatePath(path string) error {
 	if m.baseDir == "" {
-		return fmt.Errorf("base directory not set")
+		return fmt.Errorf(common.ErrBaseDirectoryNotSet)
 	}
 
 	// Use the common path validation utility
@@ -53,7 +53,7 @@ func (m *DefaultUpdateManager) CreateUpdate(ctx context.Context, file string, ac
 		return nil, nil
 	}
 	if ctx == nil {
-		log.Printf("context is nil")
+		log.Printf(common.ErrContextIsNil)
 	}
 	// Preserve existing comments
 	comments := m.PreserveComments(action)
@@ -84,7 +84,7 @@ func (m *DefaultUpdateManager) CreateUpdate(ctx context.Context, file string, ac
 func (m *DefaultUpdateManager) ApplyUpdates(ctx context.Context, updates []*Update) error {
 	// If ctx is empty, log a warning
 	if ctx == nil {
-		log.Println("context is nil")
+		log.Println(common.ErrContextIsNil)
 	}
 	// Group updates by file
 	fileUpdates := make(map[string][]*Update)
@@ -104,7 +104,7 @@ func (m *DefaultUpdateManager) ApplyUpdates(ctx context.Context, updates []*Upda
 		lock.Unlock()
 
 		if err != nil {
-			return fmt.Errorf("error updating file %s: %w", fileN, err)
+			return fmt.Errorf(common.ErrApplyingUpdates, err)
 		}
 	}
 
@@ -113,13 +113,13 @@ func (m *DefaultUpdateManager) ApplyUpdates(ctx context.Context, updates []*Upda
 func (m *DefaultUpdateManager) applyFileUpdates(fileN string, updates []*Update) error {
 	// Validate file path
 	if err := m.validatePath(fileN); err != nil {
-		return fmt.Errorf("invalid file path: %w", err)
+		return fmt.Errorf(common.ErrInvalidUpdatePath, err)
 	}
 
 	// Read file content using common utility
 	content, err := common.ReadFile(fileN)
 	if err != nil {
-		return fmt.Errorf("error reading file: %w", err)
+		return fmt.Errorf(common.ErrReadingUpdateFile, err)
 	}
 
 	// Convert content to string and split into lines
@@ -142,8 +142,8 @@ func (m *DefaultUpdateManager) applyFileUpdates(fileN string, updates []*Update)
 		}
 
 		if adjustedLineNumber <= 0 || adjustedLineNumber > len(lines) {
-			return fmt.Errorf("invalid line number %d (adjusted from %d) for file %s",
-				adjustedLineNumber, update.LineNumber, fileN)
+			return fmt.Errorf(common.ErrInvalidUpdatePath,
+				fmt.Errorf("invalid line number %d (adjusted from %d)", adjustedLineNumber, update.LineNumber))
 		}
 
 		// Get the line and preserve indentation and structure
@@ -227,7 +227,7 @@ func (m *DefaultUpdateManager) applyFileUpdates(fileN string, updates []*Update)
 	// Write updated content back to file using common utility
 	fileContent := strings.Join(lines, "\n")
 	if err := common.WriteFileString(fileN, fileContent); err != nil {
-		return fmt.Errorf("error writing file: %w", err)
+		return fmt.Errorf(common.ErrWritingUpdateFile, err)
 	}
 
 	return nil

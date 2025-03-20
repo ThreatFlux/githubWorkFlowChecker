@@ -63,7 +63,7 @@ var commonActions = []Action{
 func validatePath(base, path string) error {
 	// Check for path length
 	if len(path) > maxPathLength {
-		return fmt.Errorf("path exceeds maximum length of %d characters", maxPathLength)
+		return fmt.Errorf(common.ErrPathExceedsMaxLength, maxPathLength)
 	}
 
 	// Use common path validation utility
@@ -74,11 +74,13 @@ func validatePath(base, path string) error {
 	return common.ValidatePath(base, path, options)
 }
 
-// SysOutCall handling for os.Stdout.Sync() call with error handling
+// SysOutCall handling for os.Stdout.Sync() call
+// This is a no-op in test environments to avoid "bad file descriptor" errors
+var inTestMode = false
+
 func SysOutCall() {
-	err := os.Stdout.Sync()
-	if err != nil {
-		fmt.Println(err)
+	if !inTestMode {
+		_ = os.Stdout.Sync()
 	}
 }
 
@@ -93,21 +95,21 @@ func main() {
 	// Parse workflow count first to avoid path validation errors
 	count, err := strconv.Atoi(os.Args[2])
 	if err != nil {
-		fmt.Println("Error parsing count:", err)
+		fmt.Printf(common.ErrInvalidTestParameters+"\n", "workflow count: "+err.Error())
 		SysOutCall()
 		osExit(1)
 		return
 	}
 
 	if count <= 0 {
-		fmt.Println("Workflow count must be positive")
+		fmt.Println(common.ErrWorkflowCountMustBePositive)
 		SysOutCall()
 		osExit(1)
 		return
 	}
 
 	if count > maxWorkflowCount {
-		fmt.Printf("Workflow count exceeds maximum limit of %d\n", maxWorkflowCount)
+		fmt.Printf(common.ErrWorkflowCountExceedsLimit+"\n", maxWorkflowCount)
 		SysOutCall()
 		osExit(1)
 		return
@@ -120,7 +122,7 @@ func main() {
 
 	// First validate the output directory path
 	if err := validatePath(tempDir, outputDir); err != nil {
-		fmt.Printf("Invalid workflow directory path: %v\n", err)
+		fmt.Printf("invalid directory path: %v\n", err)
 		SysOutCall()
 		osExit(1)
 		return
@@ -144,7 +146,7 @@ func main() {
 	// Create a dummy file to ensure all directories are created
 	dummyFile := filepath.Join(workflowDir, ".gitkeep")
 	if err := common.WriteFileWithOptions(dummyFile, []byte(""), fileOptions); err != nil {
-		fmt.Printf("Error creating directory structure: %v\n", err)
+		fmt.Printf("error creating directories: %v\n", err)
 		SysOutCall()
 		osExit(1)
 		return
@@ -152,13 +154,13 @@ func main() {
 
 	// Remove the dummy file
 	if err := os.Remove(dummyFile); err != nil {
-		fmt.Printf("Warning: could not remove dummy file: %v\n", err)
+		fmt.Printf(common.ErrCouldNotRemoveDummyFile+"\n", err)
 	}
 
 	// Parse template
 	tmpl, err := template.New("workflow").Option("missingkey=error").Parse(workflowTemplate)
 	if err != nil {
-		fmt.Printf("Error parsing template: %v\n", err)
+		fmt.Printf("error generating test data: %v\n", err)
 		SysOutCall()
 		osExit(1)
 		return
@@ -200,7 +202,7 @@ func main() {
 
 		// Validate the file path
 		if err := validatePath(outputDir, filename); err != nil {
-			fmt.Printf("Invalid file path %s: %v\n", filename, err)
+			fmt.Printf("invalid file path: %v\n", err)
 			SysOutCall()
 			osExit(1)
 			return
@@ -209,7 +211,7 @@ func main() {
 		// Use a buffer to execute the template
 		var buffer strings.Builder
 		if err := tmpl.Execute(&buffer, data); err != nil {
-			fmt.Printf("Error generating workflow %d: %v\n", i, err)
+			fmt.Printf("error generating test data: %v\n", err)
 			SysOutCall()
 			osExit(1)
 			return
@@ -218,7 +220,7 @@ func main() {
 		// Check if the file exists and is read-only
 		if info, err := os.Stat(filename); err == nil {
 			if info.Mode().Perm()&0200 == 0 {
-				fmt.Printf("Error creating file %s: file exists and is read-only\n", filename)
+				fmt.Println("error creating destination file: file exists and is read-only")
 				SysOutCall()
 				osExit(1)
 				return
@@ -236,7 +238,7 @@ func main() {
 		}
 
 		if err := common.WriteFileWithOptions(filename, []byte(buffer.String()), fileOptions); err != nil {
-			fmt.Printf("Error creating file %s: %v\n", filename, err)
+			fmt.Printf("error creating destination file: %v\n", err)
 			SysOutCall()
 			osExit(1)
 			return

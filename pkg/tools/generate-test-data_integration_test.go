@@ -12,6 +12,9 @@ import (
 )
 
 func TestPathValidationEdgeCases(t *testing.T) {
+	// Set test mode flag to avoid Stdout.Sync errors
+	inTestMode = true
+
 	testDir, err := os.MkdirTemp("", "validate-path-*")
 	if err != nil {
 		t.Fatalf("Failed to create test directory: %v", err)
@@ -145,6 +148,9 @@ func TestPathValidationEdgeCases(t *testing.T) {
 }
 
 func TestAdvancedTemplateExecution(t *testing.T) {
+	// Set test mode flag to avoid Stdout.Sync errors
+	inTestMode = true
+
 	testDir, err := os.MkdirTemp("", "template-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create test directory: %v", err)
@@ -273,6 +279,9 @@ jobs:
 }
 
 func TestAdvancedWorkflowGeneration(t *testing.T) {
+	// Set test mode flag to avoid Stdout.Sync errors
+	inTestMode = true
+
 	testDir, err := os.MkdirTemp("", "workflow-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create test directory: %v", err)
@@ -404,6 +413,9 @@ func TestAdvancedWorkflowGeneration(t *testing.T) {
 }
 
 func TestFileOperationErrors(t *testing.T) {
+	// Set test mode flag to avoid Stdout.Sync errors
+	inTestMode = true
+
 	testDir, err := os.MkdirTemp("", "file-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create test directory: %v", err)
@@ -455,7 +467,8 @@ func TestFileOperationErrors(t *testing.T) {
 			},
 			wantErr: true,
 			errCheck: func(output string) bool {
-				return strings.Contains(output, "Error creating file") ||
+				return strings.Contains(output, "error creating destination file") ||
+					strings.Contains(output, "file exists and is read-only") ||
 					strings.Contains(output, "permission denied")
 			},
 		},

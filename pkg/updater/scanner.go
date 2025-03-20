@@ -26,7 +26,7 @@ type Scanner struct {
 // validatePath ensures the path is within the allowed directory
 func (s *Scanner) validatePath(path string) error {
 	if s.baseDir == "" {
-		return fmt.Errorf("base directory not set")
+		return fmt.Errorf(common.ErrBaseDirectoryNotSet)
 	}
 
 	// Use the common path validation utility
@@ -37,12 +37,12 @@ func (s *Scanner) validatePath(path string) error {
 func parseActionReference(ref string, path string, comments []string) (*ActionReference, error) {
 	parts := strings.Split(ref, "@")
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid action reference format: %s", ref)
+		return nil, fmt.Errorf(common.ErrInvalidActionRefFormat, ref)
 	}
 
 	nameParts := strings.Split(parts[0], "/")
 	if len(nameParts) < 2 {
-		return nil, fmt.Errorf("invalid action name format: %s", parts[0])
+		return nil, fmt.Errorf(common.ErrInvalidActionNameFormat, parts[0])
 	}
 
 	// For actions with more than two parts (e.g., github/codeql-action/init)
@@ -52,7 +52,7 @@ func parseActionReference(ref string, path string, comments []string) (*ActionRe
 
 	version := parts[1]
 	if version == "" {
-		return nil, fmt.Errorf("invalid action reference format: %s", ref)
+		return nil, fmt.Errorf(common.ErrInvalidActionRefFormat, ref)
 	}
 
 	var commitHash string
@@ -143,12 +143,12 @@ func (s *Scanner) checkTimeout(ctx context.Context) error {
 func (s *Scanner) ScanWorkflows(dir string) ([]string, error) {
 	// Validate the directory path
 	if err := s.validatePath(dir); err != nil {
-		return nil, fmt.Errorf("invalid directory path: %w", err)
+		return nil, fmt.Errorf(common.ErrInvalidDirectoryPath, err)
 	}
 
 	// Check if workflows directory exists
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return nil, fmt.Errorf("workflows directory not found at %s", dir)
+		return nil, fmt.Errorf(common.ErrWorkflowDirNotFound, dir)
 	}
 
 	var workflows []string
@@ -180,7 +180,7 @@ func (s *Scanner) ScanWorkflows(dir string) ([]string, error) {
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("error scanning workflows: %w", err)
+		return nil, fmt.Errorf(common.ErrScanningWorkflows, err)
 	}
 
 	return workflows, nil
@@ -190,13 +190,13 @@ func (s *Scanner) ScanWorkflows(dir string) ([]string, error) {
 func (s *Scanner) ParseActionReferences(path string) ([]ActionReference, error) {
 	// Validate the file path
 	if err := s.validatePath(path); err != nil {
-		return nil, fmt.Errorf("invalid file path: %w", err)
+		return nil, fmt.Errorf(common.ErrInvalidFilePath, err)
 	}
 
 	// Read the file using the common utility
 	content, err := common.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("error reading workflow file: %w", err)
+		return nil, fmt.Errorf(common.ErrReadingWorkflowFile, err)
 	}
 
 	// Split content into lines to preserve comments
@@ -221,19 +221,19 @@ func (s *Scanner) ParseActionReferences(path string) ([]ActionReference, error) 
 
 	var doc yaml.Node
 	if err := yaml.Unmarshal(content, &doc); err != nil {
-		return nil, fmt.Errorf("error parsing workflow YAML: %w", err)
+		return nil, fmt.Errorf(common.ErrParsingWorkflowYAML, err)
 	}
 
 	// The document node should have one child which is the root mapping
 	if len(doc.Content) == 0 {
-		return nil, fmt.Errorf("empty YAML document")
+		return nil, fmt.Errorf(common.ErrEmptyYAMLDocument)
 	}
 
 	actions := make([]ActionReference, 0)
 	seen := make(map[string]bool) // Track unique action references by line
 	err = s.parseNode(doc.Content[0], path, &actions, lineComments, seen)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing workflow content: %w", err)
+		return nil, fmt.Errorf(common.ErrParsingWorkflowContent, err)
 	}
 
 	return actions, nil

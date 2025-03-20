@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 	"github.com/google/go-github/v58/github"
 	"golang.org/x/oauth2"
 )
@@ -35,21 +36,21 @@ func TestNewDefaultVersionChecker(t *testing.T) {
 			checker := NewDefaultVersionChecker(tt.token)
 
 			if checker == nil {
-				t.Fatal("NewDefaultVersionChecker() returned nil")
+				t.Fatal(common.ErrVersionCheckerNil)
 			}
 
 			if checker.client == nil {
-				t.Fatal("NewDefaultVersionChecker() client is nil")
+				t.Fatal(common.ErrVersionCheckerClientNil)
 			}
 
 			transport := checker.client.Client().Transport
 			if tt.wantAuth {
 				if _, ok := transport.(*oauth2.Transport); !ok {
-					t.Error("Expected authenticated client, got unauthenticated")
+					t.Error(common.ErrExpectedAuthClient)
 				}
 			} else {
 				if _, ok := transport.(*oauth2.Transport); ok {
-					t.Error("Expected unauthenticated client, got authenticated")
+					t.Error(common.ErrExpectedUnauthClient)
 				}
 			}
 		})

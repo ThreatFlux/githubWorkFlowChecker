@@ -1,6 +1,7 @@
 package common
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -41,16 +42,16 @@ func DefaultPathValidationOptions() PathValidationOptions {
 func ValidatePath(baseDir, path string, options PathValidationOptions) error {
 	// Check for empty paths
 	if baseDir == "" {
-		return fmt.Errorf("base directory not set")
+		return errors.New(ErrBaseDirectoryNotSet)
 	}
 
 	if strings.TrimSpace(path) == "" {
-		return fmt.Errorf("path is empty")
+		return errors.New(ErrEmptyPath)
 	}
 
 	// Check for null bytes in both base and path
 	if strings.ContainsRune(baseDir, 0) || strings.ContainsRune(path, 0) {
-		return fmt.Errorf("path contains null bytes")
+		return errors.New(ErrPathContainsNullBytes)
 	}
 
 	// Check path length
@@ -59,7 +60,7 @@ func ValidatePath(baseDir, path string, options PathValidationOptions) error {
 		maxLength = MaxPathLength
 	}
 	if len(path) > maxLength {
-		return fmt.Errorf("path exceeds maximum length of %d characters", maxLength)
+		return fmt.Errorf(ErrPathExceedsMaxLength, maxLength)
 	}
 
 	// Clean and resolve both paths
@@ -69,27 +70,27 @@ func ValidatePath(baseDir, path string, options PathValidationOptions) error {
 	// Convert to absolute paths
 	absBase, err := filepath.Abs(cleanBase)
 	if err != nil {
-		return fmt.Errorf("failed to resolve base path: %w", err)
+		return fmt.Errorf(ErrFailedToResolveBasePath, err)
 	}
 
 	absPath, err := filepath.Abs(cleanPath)
 	if err != nil {
-		return fmt.Errorf("failed to resolve path: %w", err)
+		return fmt.Errorf(ErrFailedToResolvePath, err)
 	}
 
 	// Check if path is within base directory
 	if !strings.HasPrefix(absPath, absBase) {
-		return fmt.Errorf("path is outside of allowed directory: %s", path)
+		return fmt.Errorf(ErrPathOutsideAllowedDir, path)
 	}
 
 	// Check for path traversal attempts
 	rel, err := filepath.Rel(absBase, absPath)
 	if err != nil {
-		return fmt.Errorf("failed to determine relative path: %w", err)
+		return fmt.Errorf(ErrFailedToDetermineRelPath, err)
 	}
 
 	if strings.HasPrefix(rel, "..") || strings.HasPrefix(rel, "/") {
-		return fmt.Errorf("path traversal attempt detected")
+		return errors.New(ErrPathTraversalDetected)
 	}
 
 	// Check if the path is a symlink first using Lstat (doesn't follow symlinks)
@@ -99,29 +100,30 @@ func ValidatePath(baseDir, path string, options PathValidationOptions) error {
 			// It's a symlink, evaluate it
 			evalPath, err := filepath.EvalSymlinks(path)
 			if err != nil {
-				return fmt.Errorf("failed to evaluate symlink: %w", err)
+				return fmt.Errorf(ErrFailedToEvaluateSymlink, err)
 			}
 
 			// Evaluate the base directory as well to ensure consistent path comparison
 			evalBase, err := filepath.EvalSymlinks(baseDir)
 			if err != nil {
-				return fmt.Errorf("failed to evaluate base directory: %w", err)
+				return fmt.Errorf(ErrFailedToEvalBaseDir, err)
 			}
 
 			// Convert both to absolute paths
 			absEvalPath, err := filepath.Abs(evalPath)
 			if err != nil {
-				return fmt.Errorf("failed to resolve symlink target path: %w", err)
+				return fmt.Errorf(ErrFailedToResolveSymTarget, err)
 			}
 
 			absEvalBase, err := filepath.Abs(evalBase)
 			if err != nil {
-				return fmt.Errorf("failed to resolve evaluated base path: %w", err)
+				return fmt.Errorf(ErrFailedToResolveEvalBase, err)
 			}
 
 			// Check if the resolved symlink target is within the resolved base directory
-			if !strings.HasPrefix(absEvalPath, absEvalBase) {
-				return fmt.Errorf("symlink points outside allowed directory: path is outside of allowed directory: %s", path)
+			relPath, err := filepath.Rel(absEvalBase, absEvalPath)
+			if err != nil || strings.HasPrefix(relPath, "..") {
+				return fmt.Errorf(ErrSymlinkOutsideAllowedDir, path)
 			}
 		}
 	}
@@ -131,13 +133,13 @@ func ValidatePath(baseDir, path string, options PathValidationOptions) error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			if !options.AllowNonExistent {
-				return fmt.Errorf("path does not exist: %s", path)
+				return fmt.Errorf(ErrPathDoesNotExist, path)
 			}
 		} else {
-			return fmt.Errorf("failed to access path: %w", err)
+			return fmt.Errorf(ErrFailedToAccessPath, err)
 		}
 	} else if options.RequireRegularFile && !fileInfo.Mode().IsRegular() {
-		return fmt.Errorf("not a regular file: %s", path)
+		return fmt.Errorf(ErrNotRegularFile, path)
 	}
 
 	return nil
@@ -157,7 +159,7 @@ func IsPathSafe(baseDir, path string) bool {
 // JoinAndValidatePath joins path elements and validates the result
 func JoinAndValidatePath(baseDir string, elements ...string) (string, error) {
 	if len(elements) == 0 {
-		return "", fmt.Errorf("path is empty")
+		return "", errors.New(ErrEmptyPath)
 	}
 
 	path := filepath.Join(elements...)
