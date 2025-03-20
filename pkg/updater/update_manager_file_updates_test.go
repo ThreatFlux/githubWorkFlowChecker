@@ -16,7 +16,12 @@ func TestApplyFileUpdatesWithVariousFormats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	manager := NewUpdateManager(tempDir)
 	ctx := context.Background()
@@ -237,7 +242,12 @@ func TestApplyFileUpdatesErrorHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	manager := NewUpdateManager(tempDir)
 	ctx := context.Background()
@@ -310,7 +320,12 @@ jobs:
 	if err := os.WriteFile(outsideFile, []byte(content), 0600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	defer os.Remove(outsideFile)
+	defer func(name string) {
+		err := os.Remove(name)
+		if err != nil {
+			t.Fatalf("Failed to remove test file: %v", err)
+		}
+	}(outsideFile)
 
 	outsideUpdates := []*Update{
 		{
@@ -375,7 +390,12 @@ func TestApplyFileUpdatesConcurrent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	manager := NewUpdateManager(tempDir)
 	ctx := context.Background()
@@ -552,7 +572,12 @@ func TestApplyFileUpdatesEdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	manager := NewUpdateManager(tempDir)
 	ctx := context.Background()

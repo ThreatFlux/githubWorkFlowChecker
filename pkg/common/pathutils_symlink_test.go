@@ -17,7 +17,12 @@ func TestSymlinkValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	// Create a subdirectory
 	subDir := filepath.Join(tempDir, "subdir")
@@ -42,7 +47,12 @@ func TestSymlinkValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create outside directory: %v", err)
 	}
-	defer os.RemoveAll(outsideDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove outside directory: %v", err)
+		}
+	}(outsideDir)
 
 	// Create a file in the outside directory
 	outsideFile := filepath.Join(outsideDir, "outside.txt")
@@ -51,7 +61,7 @@ func TestSymlinkValidation(t *testing.T) {
 	}
 
 	// Create various symlinks for testing
-	symlinks := createTestSymlinks(t, tempDir, subDir, testFile, outsideDir, outsideFile)
+	symlinks := createTestSymlinks(t, tempDir, subDir, testFile, outsideFile)
 
 	// Test cases
 	tests := []struct {
@@ -221,7 +231,7 @@ type testSymlinks struct {
 }
 
 // Create various symlinks for testing
-func createTestSymlinks(t *testing.T, tempDir, subDir, testFile, outsideDir, outsideFile string) testSymlinks {
+func createTestSymlinks(t *testing.T, tempDir, subDir, testFile, outsideFile string) testSymlinks {
 	var symlinks testSymlinks
 
 	// Valid symlink within base directory
@@ -295,7 +305,12 @@ func supportsSymlinks() bool {
 	if err != nil {
 		return false
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			return
+		}
+	}(tempDir)
 
 	testFile := filepath.Join(tempDir, "test.txt")
 	if err := os.WriteFile(testFile, []byte("test"), 0600); err != nil {

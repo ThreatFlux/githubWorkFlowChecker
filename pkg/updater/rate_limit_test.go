@@ -2,6 +2,7 @@ package updater
 
 import (
 	"context"
+	"errors"
 	"log"
 	"os"
 	"sync"
@@ -102,7 +103,12 @@ func TestScannerTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			log.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}(tempDir)
 
 	// Set secure permissions
 	if err := os.Chmod(tempDir, 0750); err != nil {
@@ -160,7 +166,12 @@ func TestScannerConcurrentOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			log.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}(tempDir)
 
 	// Set secure permissions
 	if err := os.Chmod(tempDir, 0750); err != nil {
@@ -197,7 +208,7 @@ func TestScannerConcurrentOperations(t *testing.T) {
 		err := <-errChan
 		if err == nil {
 			successCount++
-		} else if err == context.DeadlineExceeded {
+		} else if errors.Is(err, context.DeadlineExceeded) {
 			timeoutCount++
 		}
 	}

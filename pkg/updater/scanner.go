@@ -338,6 +338,11 @@ func (s *Scanner) parseNode(node *yaml.Node, path string, actions *[]ActionRefer
 				return err
 			}
 		}
+	case yaml.ScalarNode:
+		return nil
+	default:
+		// Return nil for unhandled node types instead of panicking
+		return nil
 	}
 	return nil
 }
@@ -388,6 +393,11 @@ func (s *Scanner) parseAliasedNode(node *yaml.Node, aliasLine int, path string, 
 				return err
 			}
 		}
+	case yaml.ScalarNode:
+		return nil
+	default:
+		// Return nil for unhandled node types instead of panicking
+		return nil
 	}
 	return nil
 }

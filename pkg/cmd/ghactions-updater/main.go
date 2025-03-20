@@ -44,8 +44,8 @@ func validateFlags() error {
 		// Try to get token from environment
 		*token = os.Getenv("GITHUB_TOKEN")
 		if *token == "" {
-			log.Printf("token is required (provide via -token flag or GITHUB_TOKEN environment variable)")
-			*token = "test-token"
+			log.Printf("No GitHub token provided. Using public GitHub API with rate limiting. For higher rate limits, provide a token via -token flag or GITHUB_TOKEN environment variable.")
+			// Allow empty token - the client will use unauthenticated access
 		}
 	}
 
@@ -63,10 +63,10 @@ func validateFlags() error {
 }
 
 var (
-	versionCheckerFactory func(string) updater.VersionChecker = func(token string) updater.VersionChecker {
+	versionCheckerFactory = func(token string) updater.VersionChecker {
 		return updater.NewDefaultVersionChecker(token)
 	}
-	prCreatorFactory func(token, owner, repo string) updater.PRCreator = func(token, owner, repo string) updater.PRCreator {
+	prCreatorFactory = func(token, owner, repo string) updater.PRCreator {
 		return updater.NewPRCreator(token, owner, repo)
 	}
 )

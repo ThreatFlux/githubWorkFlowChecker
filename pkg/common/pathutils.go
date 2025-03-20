@@ -102,12 +102,26 @@ func ValidatePath(baseDir, path string, options PathValidationOptions) error {
 				return fmt.Errorf("failed to evaluate symlink: %w", err)
 			}
 
-			// Recursively validate the symlink target
-			// But disable symlink checking to avoid infinite recursion
-			symOptions := options
-			symOptions.CheckSymlinks = false
-			if err := ValidatePath(baseDir, evalPath, symOptions); err != nil {
-				return fmt.Errorf("symlink points outside allowed directory: %w", err)
+			// Evaluate the base directory as well to ensure consistent path comparison
+			evalBase, err := filepath.EvalSymlinks(baseDir)
+			if err != nil {
+				return fmt.Errorf("failed to evaluate base directory: %w", err)
+			}
+
+			// Convert both to absolute paths
+			absEvalPath, err := filepath.Abs(evalPath)
+			if err != nil {
+				return fmt.Errorf("failed to resolve symlink target path: %w", err)
+			}
+
+			absEvalBase, err := filepath.Abs(evalBase)
+			if err != nil {
+				return fmt.Errorf("failed to resolve evaluated base path: %w", err)
+			}
+
+			// Check if the resolved symlink target is within the resolved base directory
+			if !strings.HasPrefix(absEvalPath, absEvalBase) {
+				return fmt.Errorf("symlink points outside allowed directory: path is outside of allowed directory: %s", path)
 			}
 		}
 	}

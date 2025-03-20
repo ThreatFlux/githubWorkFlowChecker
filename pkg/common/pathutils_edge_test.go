@@ -13,7 +13,12 @@ func TestValidatePathEdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	// Create a subdirectory
 	subDir := filepath.Join(tempDir, "subdir")
@@ -45,7 +50,12 @@ func TestValidatePathEdgeCases(t *testing.T) {
 		t.Fatalf("Failed to create outside target file: %v", err)
 	}
 	outsideSymErr := os.Symlink(outsideTarget, outsideSymlink)
-	defer os.Remove(outsideTarget)
+	defer func(name string) {
+		err := os.Remove(name)
+		if err != nil {
+			t.Fatalf("Failed to remove symlink: %v", err)
+		}
+	}(outsideTarget)
 
 	// Create a broken symlink
 	brokenSymlink := filepath.Join(tempDir, "broken-symlink")
@@ -182,7 +192,12 @@ func TestValidatePathWithRelativePaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	// Save current working directory
 	origWd, err := os.Getwd()
@@ -272,7 +287,12 @@ func TestJoinAndValidatePathEdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	// Create a subdirectory
 	subDir := filepath.Join(tempDir, "subdir")
@@ -348,7 +368,12 @@ func TestSafeAbsEdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	// Save current working directory
 	origWd, err := os.Getwd()

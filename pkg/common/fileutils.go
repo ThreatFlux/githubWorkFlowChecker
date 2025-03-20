@@ -206,7 +206,12 @@ func CopyFile(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("error opening source file: %w", err)
 	}
-	defer srcFile.Close()
+	defer func(srcFile *os.File) {
+		err := srcFile.Close()
+		if err != nil {
+			fmt.Printf("error closing source file: %v\n", err)
+		}
+	}(srcFile)
 
 	// Create the destination file
 	// #nosec G304 - path is validated above
@@ -214,7 +219,12 @@ func CopyFile(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("error creating destination file: %w", err)
 	}
-	defer dstFile.Close()
+	defer func(dstFile *os.File) {
+		err := dstFile.Close()
+		if err != nil {
+			fmt.Printf("error closing destination file: %v\n", err)
+		}
+	}(dstFile)
 
 	// Copy the contents
 	_, err = io.Copy(dstFile, srcFile)
@@ -256,7 +266,12 @@ func AppendToFile(path string, data []byte) error {
 	if err != nil {
 		return fmt.Errorf("error opening file for append: %w", err)
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			fmt.Printf("error closing file: %v\n", err)
+		}
+	}(f)
 
 	// Write the data
 	if _, err := f.Write(data); err != nil {

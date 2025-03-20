@@ -61,9 +61,9 @@ jobs:
       pull-requests: write
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
       - name: Update GitHub Actions
-        uses: ThreatFlux/githubWorkFlowChecker@v1.0.0
+        uses: ThreatFlux/githubWorkFlowChecker@fc3d69cb98fb60b80a6009169959831d4f49ee7d  # v1.20250309.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           owner: ${{ github.repository_owner }}
@@ -77,10 +77,6 @@ jobs:
 
 ### CLI Installation
 
-#### Using Go
-```bash
-go install github.com/ThreatFlux/githubWorkFlowChecker/cmd/ghactions-updater@latest
-```
 
 #### Using Docker
 ```bash

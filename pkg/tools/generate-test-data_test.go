@@ -66,7 +66,12 @@ func TestWorkflowGeneration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create test directory: %v", err)
 			}
-			defer os.RemoveAll(testDir)
+			defer func(path string) {
+				err := os.RemoveAll(path)
+				if err != nil {
+					t.Fatalf("Failed to remove temp dir: %v", err)
+				}
+			}(testDir)
 
 			// Create workflow directory structure
 			workflowDir := filepath.Join(testDir, ".github", "workflows")

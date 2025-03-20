@@ -16,7 +16,12 @@ func TestPathValidationEdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test directory: %v", err)
 	}
-	defer os.RemoveAll(testDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove test directory: %v", err)
+		}
+	}(testDir)
 
 	tests := []struct {
 		name     string

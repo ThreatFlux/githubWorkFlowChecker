@@ -13,7 +13,12 @@ func TestValidatePathErrorCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	// Create a test file
 	testFile := filepath.Join(tempDir, "test.txt")
@@ -89,7 +94,12 @@ func TestJoinAndValidatePathErrorCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	// Test with empty elements
 	_, err = JoinAndValidatePath(tempDir)
@@ -129,7 +139,12 @@ func TestSafeAbsErrorCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
 
 	// Test with a path that contains a null byte
 	_, err = SafeAbs(tempDir, "test\x00.txt")

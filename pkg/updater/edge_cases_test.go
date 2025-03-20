@@ -146,7 +146,12 @@ jobs:
 			if err != nil {
 				t.Fatalf("Failed to create temp dir: %v", err)
 			}
-			defer os.RemoveAll(tempDir)
+			defer func(path string) {
+				err := os.RemoveAll(path)
+				if err != nil {
+					t.Fatalf("Failed to remove temp dir: %v", err)
+				}
+			}(tempDir)
 
 			// Set secure permissions on temp directory
 			if err := os.Chmod(tempDir, 0750); err != nil {
@@ -257,7 +262,12 @@ jobs:
 			if err != nil {
 				t.Fatalf("Failed to create temp dir: %v", err)
 			}
-			defer os.RemoveAll(tempDir)
+			defer func(path string) {
+				err := os.RemoveAll(path)
+				if err != nil {
+					t.Fatalf("Failed to remove temp dir: %v", err)
+				}
+			}(tempDir)
 
 			// Set secure permissions on temp directory
 			if err := os.Chmod(tempDir, 0750); err != nil {
