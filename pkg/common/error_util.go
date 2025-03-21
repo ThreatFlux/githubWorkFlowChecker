@@ -133,7 +133,6 @@ const (
 	ErrCouldNotRemoveDummyFile     = "Warning: could not remove dummy file: %v"
 )
 
-// Body Failures
 const (
 	ErrFailedToCloseBody = "Failed to close response body: %v"
 )

@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [v1.20250320.1] - 2025-03-20
+
 ## [v1.20250318.1] - 2025-03-18
 
 ## [v1.20250314.1] - 2025-03-14
@@ -141,3 +143,4 @@
 [v1.20250309.1]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/v1.20250309.1
 [v1.20250314.1]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/v1.20250314.1
 [v1.20250318.1]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/v1.20250318.1
+[v1.20250320.1]: https://github.com/ThreatFlux/githubWorkFlowChecker/releases/tag/v1.20250320.1

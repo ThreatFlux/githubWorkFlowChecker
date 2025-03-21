@@ -188,7 +188,6 @@ func TestDefaultVersionChecker_GetLatestVersion(t *testing.T) {
 			// Create a test server with the appropriate configuration
 			server, checker := SetupVersionTestServer(t, tt.serverType)
 			defer server.Close()
-
 			gotVersion, gotHash, err := checker.GetLatestVersion(context.Background(), tt.action)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetLatestVersion() error = %v, wantErr %v", err, tt.wantErr)
@@ -322,7 +321,6 @@ func TestDefaultVersionChecker_IsUpdateAvailable(t *testing.T) {
 			// Create a test server with the appropriate configuration
 			server, checker := SetupVersionTestServer(t, tt.ServerType)
 			defer server.Close()
-
 			gotAvailable, gotVersion, gotHash, err := checker.IsUpdateAvailable(context.Background(), tt.Action)
 			if (err != nil) != tt.WantError {
 				t.Errorf("IsUpdateAvailable() error = %v, wantErr %v", err, tt.WantError)
@@ -440,7 +438,6 @@ func TestVersionHelperFunctions(t *testing.T) {
 func TestUnknownServerType(t *testing.T) {
 	// Call getServerConfig directly with an unknown server type
 	config := getServerConfig("unknown-server-type", "owner", "repo")
-
 	// Config should be empty but successfully returned
 	if config.LatestRelease.Path != "" {
 		t.Errorf("Expected empty config for unknown server type, got path: %s", config.LatestRelease.Path)
@@ -542,6 +539,7 @@ func TestDefaultVersionChecker_GetCommitHash(t *testing.T) {
 			action: ActionReference{
 				Owner: "test-owner",
 				Name:  "test-repo",
+
 			},
 			version:    "v6.0.0",
 			serverType: AnnotatedTagErrorServer,
