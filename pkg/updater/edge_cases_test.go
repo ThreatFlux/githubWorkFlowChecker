@@ -6,13 +6,63 @@ import (
 	"testing"
 )
 
+// testWorkflowCase is a reusable test structure for workflow parsing tests
+type testWorkflowCase struct {
+	name     string
+	content  string
+	wantRefs int // number of action references expected
+	wantErr  bool
+}
+
+// testWorkflowParsing is a helper function to test parsing workflow content
+func testWorkflowParsing(t *testing.T, tc testWorkflowCase) {
+	// Create temporary directory
+	tempDir, err := os.MkdirTemp("", "workflow-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp dir: %v", err)
+		}
+	}(tempDir)
+
+	// Set secure permissions on temp directory
+	if err := os.Chmod(tempDir, 0750); err != nil {
+		t.Fatalf("Failed to set temp dir permissions: %v", err)
+	}
+
+	// Create scanner with temp directory as base
+	scanner := NewScanner(tempDir)
+
+	// Create test file
+	testFile := filepath.Join(tempDir, "workflow.yml")
+	err = os.WriteFile(testFile, []byte(tc.content), 0600)
+	if err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Parse action references
+	refs, err := scanner.ParseActionReferences(testFile)
+	if tc.wantErr {
+		if err == nil {
+			t.Error("Expected error, got nil")
+		}
+		return
+	}
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	if len(refs) != tc.wantRefs {
+		t.Errorf("Expected %d references, got %d", tc.wantRefs, len(refs))
+	}
+}
+
 func TestParseActionReferencesEdgeCases(t *testing.T) {
-	tests := []struct {
-		name     string
-		content  string
-		wantRefs int // number of action references expected
-		wantErr  bool
-	}{
+	// Define test cases for action references edge cases
+	tests := []testWorkflowCase{
 		{
 			name: "nested steps with multiple uses",
 			content: `name: Test Workflow
@@ -139,61 +189,18 @@ jobs:
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create temporary directory
-			tempDir, err := os.MkdirTemp("", "workflow-test")
-			if err != nil {
-				t.Fatalf("Failed to create temp dir: %v", err)
-			}
-			defer func(path string) {
-				err := os.RemoveAll(path)
-				if err != nil {
-					t.Fatalf("Failed to remove temp dir: %v", err)
-				}
-			}(tempDir)
-
-			// Set secure permissions on temp directory
-			if err := os.Chmod(tempDir, 0750); err != nil {
-				t.Fatalf("Failed to set temp dir permissions: %v", err)
-			}
-
-			// Create scanner with temp directory as base
-			scanner := NewScanner(tempDir)
-
-			// Create test file
-			testFile := filepath.Join(tempDir, "workflow.yml")
-			err = os.WriteFile(testFile, []byte(tt.content), 0600)
-			if err != nil {
-				t.Fatalf("Failed to create test file: %v", err)
-			}
-
-			// Parse action references
-			refs, err := scanner.ParseActionReferences(testFile)
-			if tt.wantErr {
-				if err == nil {
-					t.Error("Expected error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
-
-			if len(refs) != tt.wantRefs {
-				t.Errorf("Expected %d references, got %d", tt.wantRefs, len(refs))
-			}
+	// Run tests using our helper function
+	for _, tc := range tests {
+		tc := tc // Create a local copy to avoid issues with closures
+		t.Run(tc.name, func(t *testing.T) {
+			testWorkflowParsing(t, tc)
 		})
 	}
 }
 
 func TestParseNodeEdgeCases(t *testing.T) {
-	tests := []struct {
-		name     string
-		content  string
-		wantRefs int
-		wantErr  bool
-	}{
+	// Define test cases for node parsing edge cases
+	tests := []testWorkflowCase{
 		{
 			name: "deeply nested uses",
 			content: `name: Test
@@ -255,50 +262,11 @@ jobs:
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create temporary directory
-			tempDir, err := os.MkdirTemp("", "workflow-test")
-			if err != nil {
-				t.Fatalf("Failed to create temp dir: %v", err)
-			}
-			defer func(path string) {
-				err := os.RemoveAll(path)
-				if err != nil {
-					t.Fatalf("Failed to remove temp dir: %v", err)
-				}
-			}(tempDir)
-
-			// Set secure permissions on temp directory
-			if err := os.Chmod(tempDir, 0750); err != nil {
-				t.Fatalf("Failed to set temp dir permissions: %v", err)
-			}
-
-			// Create scanner with temp directory as base
-			scanner := NewScanner(tempDir)
-
-			// Create test file
-			testFile := filepath.Join(tempDir, "workflow.yml")
-			err = os.WriteFile(testFile, []byte(tt.content), 0600)
-			if err != nil {
-				t.Fatalf("Failed to create test file: %v", err)
-			}
-
-			// Parse action references
-			refs, err := scanner.ParseActionReferences(testFile)
-			if tt.wantErr {
-				if err == nil {
-					t.Error("Expected error, got nil")
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("Unexpected error: %v", err)
-			}
-
-			if len(refs) != tt.wantRefs {
-				t.Errorf("Expected %d references, got %d", tt.wantRefs, len(refs))
-			}
+	// Run tests using our helper function
+	for _, tc := range tests {
+		tc := tc // Create a local copy to avoid issues with closures
+		t.Run(tc.name, func(t *testing.T) {
+			testWorkflowParsing(t, tc)
 		})
 	}
 }

@@ -10,6 +10,7 @@ GOVULNCHECK ?= govulncheck
 DOCKER ?= docker
 COSIGN ?= cosign
 SYFT ?= syft
+DUPL ?= dupl
 
 # Version information
 VERSION ?= $(shell git describe --tags --always)
@@ -36,7 +37,7 @@ DOCKER_TAG ?= $(VERSION)
 DOCKER_LATEST = $(DOCKER_IMAGE):latest
 DOCKER_DEV_IMAGE = $(DOCKER_REGISTRY)/go-dev
 
-.PHONY: all build test lint clean docker-build check-versions install-tools security help version-info coverage docker-push docker-sign docker-verify install docker-run fmt docker-test docker-tests docker-dev-build docker-fmt docker-lint docker-security docker-coverage docker-all docker-shell
+.PHONY: all build test lint clean docker-build check-versions install-tools security help version-info coverage dupl-check docker-push docker-sign docker-verify install docker-run fmt docker-test docker-tests docker-dev-build docker-fmt docker-lint docker-security docker-coverage docker-dupl-check docker-all docker-shell
 
 # Version check targets
 check-versions: ## Check all required tool versions
@@ -56,6 +57,7 @@ install-tools: ## Install required Go tools
 	@go install github.com/sonatype-nexus-community/nancy@latest
 	@go install github.com/sigstore/cosign/cmd/cosign@latest
 	@go install github.com/anchore/syft/cmd/syft@latest
+	@go install github.com/mibk/dupl@latest
 
 build: check-versions ## Build the application
 	@echo "Building application..."
@@ -89,6 +91,11 @@ coverage: ## Generate test coverage report
 	@$(GO) test -coverprofile=$(COVERAGE_PROFILE) ./pkg/...
 	@$(GO) tool cover -html=$(COVERAGE_PROFILE) -o $(COVERAGE_HTML)
 	@$(GO) tool cover -func=$(COVERAGE_PROFILE)
+
+dupl-check: install-tools ## Check for duplicate code
+	@echo "Checking for duplicate code..."
+	@$(DUPL) -t 75 -plumbing -verbose ./pkg/
+	@echo "Duplicate code check completed"
 
 security: install-tools ## Run security scans
 	@echo "Running security scans..."
@@ -152,7 +159,7 @@ clean: ## Remove build artifacts and generated files
 	@rm -rf dist/
 	@go clean -cache -testcache -modcache -fuzzcache
 
-all: fmt test security lint build docker-build ## Run all checks and build
+all: fmt test security lint dupl-check build docker-build ## Run all checks and build
 
 help: ## Display available commands
 	@echo "Available commands:"
@@ -195,9 +202,13 @@ docker-coverage: docker-dev-build ## Generate test coverage report using Docker
 	@echo "Generating coverage report using Docker..."
 	@$(DOCKER) run -v $(CURDIR):/workspace -e GITHUB_TOKEN=$(GITHUB_TOKEN) $(DOCKER_DEV_IMAGE) coverage
 
+docker-dupl-check: docker-dev-build ## Check for duplicate code using Docker
+	@echo "Checking for duplicate code using Docker..."
+	@$(DOCKER) run -v $(CURDIR):/workspace $(DOCKER_DEV_IMAGE) dupl-check
+
 docker-all: docker-dev-build ## Run all checks and tests using Docker
 	@echo "Running all checks and tests using Docker..."
-	@$(DOCKER) run -v $(CURDIR):/workspace -e GITHUB_TOKEN=$(GITHUB_TOKEN) $(DOCKER_DEV_IMAGE) all
+	@$(DOCKER) run -v $(CURDIR):/workspace -e GITHUB_TOKEN=$(GITHUB_TOKEN) $(DOCKER_DEV_IMAGE) all dupl-check
 
 docker-shell: docker-dev-build ## Start a shell in the development container
 	@echo "Starting shell in development container..."

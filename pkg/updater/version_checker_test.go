@@ -2,14 +2,11 @@ package updater
 
 import (
 	"context"
-	"fmt"
+	"io"
 	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"testing"
 
 	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
-	"github.com/google/go-github/v58/github"
 	"golang.org/x/oauth2"
 )
 
@@ -139,7 +136,7 @@ func TestDefaultVersionChecker_GetLatestVersion(t *testing.T) {
 	tests := []struct {
 		name        string
 		action      ActionReference
-		mockHandler func(w http.ResponseWriter, r *http.Request)
+		serverType  VersionTestServerType
 		wantVersion string
 		wantHash    string
 		wantErr     bool
@@ -147,53 +144,21 @@ func TestDefaultVersionChecker_GetLatestVersion(t *testing.T) {
 		{
 			name: "successful latest release",
 			action: ActionReference{
-				Owner: "owner",
-				Name:  "repo",
+				Owner: "test-owner",
+				Name:  "test-repo",
 			},
-			mockHandler: func(w http.ResponseWriter, r *http.Request) {
-				switch r.URL.Path {
-				case "/repos/owner/repo/releases/latest":
-					_, err := fmt.Fprintf(w, `{"tag_name": "v1.0.0"}`)
-					if err != nil {
-						return
-					}
-				case "/repos/owner/repo/git/ref/tags/v1.0.0":
-					_, err := fmt.Fprintf(w, `{"object": {"sha": "abc123", "type": "commit"}}`)
-					if err != nil {
-						return
-					}
-				default:
-					http.Error(w, "not found", http.StatusNotFound)
-				}
-			},
-			wantVersion: "v1.0.0",
+			serverType:  NormalVersionServer,
+			wantVersion: "v2.0.0",
 			wantHash:    "abc123",
 			wantErr:     false,
 		},
 		{
 			name: "no releases but has tags",
 			action: ActionReference{
-				Owner: "owner",
-				Name:  "repo",
+				Owner: "test-owner",
+				Name:  "test-repo",
 			},
-			mockHandler: func(w http.ResponseWriter, r *http.Request) {
-				switch r.URL.Path {
-				case "/repos/owner/repo/releases/latest":
-					http.Error(w, "Not found", http.StatusNotFound)
-				case "/repos/owner/repo/tags":
-					_, err := fmt.Fprintf(w, `[{"name": "v1.0.0"}]`)
-					if err != nil {
-						return
-					}
-				case "/repos/owner/repo/git/ref/tags/v1.0.0":
-					_, err := fmt.Fprintf(w, `{"object": {"sha": "def456", "type": "commit"}}`)
-					if err != nil {
-						return
-					}
-				default:
-					http.Error(w, "not found", http.StatusNotFound)
-				}
-			},
+			serverType:  EmptyReleaseServer,
 			wantVersion: "v1.0.0",
 			wantHash:    "def456",
 			wantErr:     false,
@@ -201,56 +166,28 @@ func TestDefaultVersionChecker_GetLatestVersion(t *testing.T) {
 		{
 			name: "no releases and tags error",
 			action: ActionReference{
-				Owner: "owner",
-				Name:  "repo",
+				Owner: "test-owner",
+				Name:  "test-repo",
 			},
-			mockHandler: func(w http.ResponseWriter, r *http.Request) {
-				switch r.URL.Path {
-				case "/repos/owner/repo/releases/latest":
-					http.Error(w, "Not found", http.StatusNotFound)
-				case "/repos/owner/repo/tags":
-					http.Error(w, "Server error", http.StatusInternalServerError)
-				default:
-					http.Error(w, "not found", http.StatusNotFound)
-				}
-			},
-			wantErr: true,
+			serverType: ErrorTagsServer,
+			wantErr:    true,
 		},
 		{
 			name: "no releases and empty tags",
 			action: ActionReference{
-				Owner: "owner",
-				Name:  "repo",
+				Owner: "test-owner",
+				Name:  "test-repo",
 			},
-			mockHandler: func(w http.ResponseWriter, r *http.Request) {
-				switch r.URL.Path {
-				case "/repos/owner/repo/releases/latest":
-					http.Error(w, "Not found", http.StatusNotFound)
-				case "/repos/owner/repo/tags":
-					_, err := fmt.Fprintf(w, `[]`)
-					if err != nil {
-						return
-					}
-				default:
-					http.Error(w, "not found", http.StatusNotFound)
-				}
-			},
-			wantErr: true,
+			serverType: EmptyTagsServer,
+			wantErr:    true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a new test server for each test case
-			server := httptest.NewServer(http.HandlerFunc(tt.mockHandler))
+			// Create a test server with the appropriate configuration
+			server, checker := SetupVersionTestServer(t, tt.serverType)
 			defer server.Close()
-
-			// Create a client that points to the test server
-			client := github.NewClient(nil)
-			parseUrl, _ := url.Parse(server.URL + "/")
-			client.BaseURL = parseUrl
-
-			checker := &DefaultVersionChecker{client: client}
 
 			gotVersion, gotHash, err := checker.GetLatestVersion(context.Background(), tt.action)
 			if (err != nil) != tt.wantErr {
@@ -270,352 +207,363 @@ func TestDefaultVersionChecker_GetLatestVersion(t *testing.T) {
 }
 
 func TestDefaultVersionChecker_IsUpdateAvailable(t *testing.T) {
-	tests := []struct {
-		name          string
-		action        ActionReference
-		mockHandler   func(w http.ResponseWriter, r *http.Request)
-		wantAvailable bool
-		wantVersion   string
-		wantHash      string
-		wantErr       bool
-	}{
+	// First, let's enhance our version_checker_test_helper.go to support these tests
+	// For now, we'll use the standard test cases that we can support with the current helpers
+
+	tests := []VersionTestCase{
 		{
-			name: "update available with version comparison",
-			action: ActionReference{
-				Owner:   "owner",
-				Name:    "repo",
+			Name: "update available with version comparison",
+			Action: ActionReference{
+				Owner:   "test-owner",
+				Name:    "test-repo",
 				Version: "v1.0.0",
 			},
-			mockHandler: func(w http.ResponseWriter, r *http.Request) {
-				switch r.URL.Path {
-				case "/repos/owner/repo/releases/latest":
-					_, err := fmt.Fprintf(w, `{"tag_name": "v2.0.0"}`)
-					if err != nil {
-						return
-					}
-				case "/repos/owner/repo/git/ref/tags/v2.0.0":
-					_, err := fmt.Fprintf(w, `{"object": {"sha": "abc123", "type": "commit"}}`)
-					if err != nil {
-						return
-					}
-				default:
-					http.Error(w, "not found", http.StatusNotFound)
-				}
-			},
-			wantAvailable: true,
-			wantVersion:   "v2.0.0",
-			wantHash:      "abc123",
-			wantErr:       false,
+			ServerType:    NormalVersionServer, // This server returns v2.0.0 as latest version
+			WantAvailable: true,
+			WantVersion:   "v2.0.0",
+			WantHash:      "abc123",
+			WantError:     false,
 		},
 		{
-			name: "update available with commit hash comparison",
-			action: ActionReference{
-				Owner:      "owner",
-				Name:       "repo",
-				Version:    "v1.0.0",
-				CommitHash: "old123",
-			},
-			mockHandler: func(w http.ResponseWriter, r *http.Request) {
-				switch r.URL.Path {
-				case "/repos/owner/repo/releases/latest":
-					_, err := fmt.Fprintf(w, `{"tag_name": "v1.0.0"}`)
-					if err != nil {
-						return
-					}
-				case "/repos/owner/repo/git/ref/tags/v1.0.0":
-					_, err := fmt.Fprintf(w, `{"object": {"sha": "new123", "type": "commit"}}`)
-					if err != nil {
-						return
-					}
-				default:
-					http.Error(w, "not found", http.StatusNotFound)
-				}
-			},
-			wantAvailable: true,
-			wantVersion:   "v1.0.0",
-			wantHash:      "new123",
-			wantErr:       false,
-		},
-		{
-			name: "no update needed - same commit SHA",
-			action: ActionReference{
-				Owner:   "owner",
-				Name:    "repo",
-				Version: "abc123def456789abcdef0123456789abcdef012", // 40-char SHA
-			},
-			mockHandler: func(w http.ResponseWriter, r *http.Request) {
-				switch r.URL.Path {
-				case "/repos/owner/repo/releases/latest":
-					_, err := fmt.Fprintf(w, `{"tag_name": "v1.0.0"}`)
-					if err != nil {
-						return
-					}
-				case "/repos/owner/repo/git/ref/tags/v1.0.0":
-					_, err := fmt.Fprintf(w, `{"object": {"sha": "abc123def456789abcdef0123456789abcdef012", "type": "commit"}}`)
-					if err != nil {
-						return
-					}
-				default:
-					http.Error(w, "not found", http.StatusNotFound)
-				}
-			},
-			wantAvailable: false,
-			wantVersion:   "v1.0.0",
-			wantHash:      "abc123def456789abcdef0123456789abcdef012",
-			wantErr:       false,
-		},
-		{
-			name: "error getting latest version",
-			action: ActionReference{
-				Owner:   "owner",
-				Name:    "repo",
+			Name: "error getting latest version",
+			Action: ActionReference{
+				Owner:   "test-owner",
+				Name:    "test-repo",
 				Version: "v1.0.0",
 			},
-			mockHandler: func(w http.ResponseWriter, r *http.Request) {
-				http.Error(w, "Server error", http.StatusInternalServerError)
+			ServerType:    ErrorReleaseServer,
+			WantAvailable: false,
+			WantVersion:   "",
+			WantHash:      "",
+			WantError:     true,
+		},
+		{
+			Name: "no releases but has tags",
+			Action: ActionReference{
+				Owner:   "test-owner",
+				Name:    "test-repo",
+				Version: "v0.9.0", // Older than v1.0.0 returned by EmptyReleaseServer
 			},
-			wantAvailable: false,
-			wantVersion:   "",
-			wantHash:      "",
-			wantErr:       true,
+			ServerType:    EmptyReleaseServer,
+			WantAvailable: true,
+			WantVersion:   "v1.0.0",
+			WantHash:      "def456",
+			WantError:     false,
+		},
+		{
+			Name: "no update available - empty tags",
+			Action: ActionReference{
+				Owner:   "test-owner",
+				Name:    "test-repo",
+				Version: "v1.0.0",
+			},
+			ServerType:    EmptyTagsServer,
+			WantAvailable: false,
+			WantError:     true,
+		},
+		{
+			Name: "version is a commit SHA - update available when different",
+			Action: ActionReference{
+				Owner:   "test-owner",
+				Name:    "test-repo",
+				Version: "0123456789abcdef0123456789abcdef01234567", // Full length SHA string
+			},
+			ServerType:    NormalVersionServer, // Server returns abc123 as latest hash
+			WantAvailable: true,
+			WantVersion:   "v2.0.0",
+			WantHash:      "abc123",
+			WantError:     false,
+		},
+		{
+			Name: "version is a commit SHA - no update when same",
+			Action: ActionReference{
+				Owner:   "test-owner",
+				Name:    "test-repo",
+				Version: "abc123", // Same as what the server will return
+			},
+			ServerType:    NormalVersionServer,
+			WantAvailable: false,
+			WantVersion:   "v2.0.0",
+			WantHash:      "abc123",
+			WantError:     false,
+		},
+		{
+			Name: "using commit hash comparison when available",
+			Action: ActionReference{
+				Owner:      "test-owner",
+				Name:       "test-repo",
+				Version:    "v2.0.0", // Same version as latest
+				CommitHash: "xyz789", // Different hash than latest
+			},
+			ServerType:    NormalVersionServer, // Server returns abc123 as latest hash
+			WantAvailable: true,
+			WantVersion:   "v2.0.0",
+			WantHash:      "abc123",
+			WantError:     false,
+		},
+		{
+			Name: "using commit hash - no update when same hash",
+			Action: ActionReference{
+				Owner:      "test-owner",
+				Name:       "test-repo",
+				Version:    "v1.0.0", // Different version
+				CommitHash: "abc123", // Same hash as latest
+			},
+			ServerType:    NormalVersionServer,
+			WantAvailable: false,
+			WantVersion:   "v2.0.0",
+			WantHash:      "abc123",
+			WantError:     false,
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create a new test server for each test case
-			server := httptest.NewServer(http.HandlerFunc(tt.mockHandler))
+		t.Run(tt.Name, func(t *testing.T) {
+			// Create a test server with the appropriate configuration
+			server, checker := SetupVersionTestServer(t, tt.ServerType)
 			defer server.Close()
 
-			// Create a client that points to the test server
-			client := github.NewClient(nil)
-			parseURL, _ := url.Parse(server.URL + "/")
-			client.BaseURL = parseURL
-
-			checker := &DefaultVersionChecker{client: client}
-
-			gotAvailable, gotVersion, gotHash, err := checker.IsUpdateAvailable(context.Background(), tt.action)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("IsUpdateAvailable() error = %v, wantErr %v", err, tt.wantErr)
+			gotAvailable, gotVersion, gotHash, err := checker.IsUpdateAvailable(context.Background(), tt.Action)
+			if (err != nil) != tt.WantError {
+				t.Errorf("IsUpdateAvailable() error = %v, wantErr %v", err, tt.WantError)
 				return
 			}
-			if !tt.wantErr {
-				if gotAvailable != tt.wantAvailable {
-					t.Errorf("IsUpdateAvailable() available = %v, want %v", gotAvailable, tt.wantAvailable)
+			if !tt.WantError {
+				if gotAvailable != tt.WantAvailable {
+					t.Errorf("IsUpdateAvailable() available = %v, want %v", gotAvailable, tt.WantAvailable)
 				}
-				if gotVersion != tt.wantVersion {
-					t.Errorf("IsUpdateAvailable() version = %v, want %v", gotVersion, tt.wantVersion)
+				if gotVersion != tt.WantVersion {
+					t.Errorf("IsUpdateAvailable() version = %v, want %v", gotVersion, tt.WantVersion)
 				}
-				if gotHash != tt.wantHash {
-					t.Errorf("IsUpdateAvailable() hash = %v, want %v", gotHash, tt.wantHash)
+				if gotHash != tt.WantHash {
+					t.Errorf("IsUpdateAvailable() hash = %v, want %v", gotHash, tt.WantHash)
 				}
 			}
 		})
 	}
 }
 
+// TestVersionHelperFunctions validates the test helper functions themselves
+func TestVersionHelperFunctions(t *testing.T) {
+	serverTypes := []struct {
+		name       string
+		serverType VersionTestServerType
+		testPaths  []string // Paths to test for this server type
+	}{
+		{
+			name:       "InvalidRefServer",
+			serverType: InvalidRefServer,
+			testPaths: []string{
+				"/repos/test-owner/test-repo/releases/latest",
+				"/repos/test-owner/test-repo/git/ref/tags/v1.0.0",
+			},
+		},
+		{
+			name:       "MissingObjectServer",
+			serverType: MissingObjectServer,
+			testPaths: []string{
+				"/repos/test-owner/test-repo/releases/latest",
+				"/repos/test-owner/test-repo/git/ref/tags/v4.0.0",
+			},
+		},
+		{
+			name:       "MissingSHAServer",
+			serverType: MissingSHAServer,
+			testPaths: []string{
+				"/repos/test-owner/test-repo/releases/latest",
+				"/repos/test-owner/test-repo/git/ref/tags/v5.0.0",
+			},
+		},
+		{
+			name:       "AnnotatedTagServer",
+			serverType: AnnotatedTagServer,
+			testPaths: []string{
+				"/repos/test-owner/test-repo/releases/latest",
+				"/repos/test-owner/test-repo/git/ref/tags/v2.0.0",
+				"/repos/test-owner/test-repo/git/tags/tag123",
+			},
+		},
+		{
+			name:       "AnnotatedTagErrorServer",
+			serverType: AnnotatedTagErrorServer,
+			testPaths: []string{
+				"/repos/test-owner/test-repo/releases/latest",
+				"/repos/test-owner/test-repo/git/ref/tags/v6.0.0",
+				"/repos/test-owner/test-repo/git/tags/tag456",
+			},
+		},
+		{
+			name:       "MissingTagObjectServer",
+			serverType: MissingTagObjectServer,
+			testPaths: []string{
+				"/repos/test-owner/test-repo/releases/latest",
+				"/repos/test-owner/test-repo/git/ref/tags/v7.0.0",
+				"/repos/test-owner/test-repo/git/tags/tag789",
+			},
+		},
+	}
+
+	for _, st := range serverTypes {
+		t.Run(st.name, func(t *testing.T) {
+			// Create test server using our helper function
+			server, _ := SetupVersionTestServer(t, st.serverType)
+			defer server.Close()
+
+			// Test each path for this server type
+			for _, path := range st.testPaths {
+				t.Run(path, func(t *testing.T) {
+					// Make a request to specific endpoint
+					req, _ := http.NewRequest("GET", server.URL+path, nil)
+					resp, err := http.DefaultClient.Do(req)
+					if err != nil {
+						t.Fatalf("Error making request: %v", err)
+					}
+					defer func(Body io.ReadCloser) {
+						err := Body.Close()
+						if err != nil {
+							t.Fatalf(common.ErrFailedToCloseBody, err)
+						}
+					}(resp.Body)
+
+					// All helper functions should set up the endpoints
+					// We don't care what the response is, just that it exists
+					if resp.StatusCode == http.StatusNotFound {
+						t.Errorf("Endpoint %s not found", path)
+					}
+				})
+			}
+		})
+	}
+}
+
+// TestUnknownServerType verifies that unknown server types return empty configs
+func TestUnknownServerType(t *testing.T) {
+	// Call getServerConfig directly with an unknown server type
+	config := getServerConfig("unknown-server-type", "owner", "repo")
+
+	// Config should be empty but successfully returned
+	if config.LatestRelease.Path != "" {
+		t.Errorf("Expected empty config for unknown server type, got path: %s", config.LatestRelease.Path)
+	}
+
+	// Also test the default case in SetupVersionTestServer
+	t.Run("SetupWithUnknownType", func(t *testing.T) {
+		server, checker := SetupVersionTestServer(t, "unknown-server-type")
+		defer server.Close()
+
+		// Should still have a valid checker and server
+		if checker == nil {
+			t.Error("Expected non-nil checker even with unknown server type")
+		}
+
+		// Try making a request to server endpoint (it should be 404 since no endpoints are configured)
+		req, _ := http.NewRequest("GET", server.URL+"/repos/test-owner/test-repo/releases/latest", nil)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("Error making request: %v", err)
+		}
+		defer func(Body io.ReadCloser) {
+			err := Body.Close()
+			if err != nil {
+				t.Fatalf(common.ErrFailedToCloseBody, err)
+			}
+		}(resp.Body)
+
+		// Since the config is empty, we expect a 404 as no endpoints were setup
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("Expected 404 for unknown server type, got %d", resp.StatusCode)
+		}
+	})
+}
+
 func TestDefaultVersionChecker_GetCommitHash(t *testing.T) {
-	mux := http.NewServeMux()
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	client := github.NewClient(nil)
-	parseURL, _ := url.Parse(server.URL + "/")
-	client.BaseURL = parseURL
-
-	checker := &DefaultVersionChecker{client: client}
-
 	tests := []struct {
 		name       string
 		action     ActionReference
 		version    string
-		setupMocks func(mux *http.ServeMux, action ActionReference)
+		serverType VersionTestServerType
 		wantHash   string
 		wantErr    bool
 	}{
 		{
 			name: "commit reference",
 			action: ActionReference{
-				Owner: "owner",
-				Name:  "repo",
+				Owner: "test-owner",
+				Name:  "test-repo",
 			},
-			version: "v1.0.0",
-			setupMocks: func(mux *http.ServeMux, action ActionReference) {
-				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/v1.0.0", action.Owner, action.Name),
-					func(w http.ResponseWriter, r *http.Request) {
-						_, err := fmt.Fprintf(w, `{
-							"ref": "refs/tags/v1.0.0",
-							"object": {
-								"sha": "abc123",
-								"type": "commit"
-							}
-						}`)
-						if err != nil {
-							return
-						}
-					})
-			},
-			wantHash: "abc123",
-			wantErr:  false,
+			version:    "v2.0.0",
+			serverType: NormalVersionServer,
+			wantHash:   "abc123",
+			wantErr:    false,
 		},
 		{
 			name: "annotated tag",
 			action: ActionReference{
-				Owner: "owner",
-				Name:  "repo",
+				Owner: "test-owner",
+				Name:  "test-repo",
 			},
-			version: "v2.0.0",
-			setupMocks: func(mux *http.ServeMux, action ActionReference) {
-				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/v2.0.0", action.Owner, action.Name),
-					func(w http.ResponseWriter, r *http.Request) {
-						_, err := fmt.Fprintf(w, `{
-							"ref": "refs/tags/v2.0.0",
-							"object": {
-								"sha": "tag123",
-								"type": "tag"
-							}
-						}`)
-						if err != nil {
-							return
-						}
-					})
-				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/tags/tag123", action.Owner, action.Name),
-					func(w http.ResponseWriter, r *http.Request) {
-						_, err := fmt.Fprintf(w, `{
-							"sha": "tag123",
-							"object": {
-								"sha": "commit123",
-								"type": "commit"
-							}
-						}`)
-						if err != nil {
-							return
-						}
-					})
-			},
-			wantHash: "commit123",
-			wantErr:  false,
+			version:    "v2.0.0",
+			serverType: AnnotatedTagServer,
+			wantHash:   "commit123",
+			wantErr:    false,
 		},
 		{
 			name: "ref not found error",
 			action: ActionReference{
-				Owner: "owner",
-				Name:  "repo",
+				Owner: "test-owner",
+				Name:  "test-repo",
 			},
-			version: "v3.0.0",
-			setupMocks: func(mux *http.ServeMux, action ActionReference) {
-				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/v3.0.0", action.Owner, action.Name),
-					func(w http.ResponseWriter, r *http.Request) {
-						http.Error(w, "Not found", http.StatusNotFound)
-					})
-			},
-			wantErr: true,
+			version:    "v3.0.0",
+			serverType: InvalidRefServer,
+			wantErr:    true,
 		},
 		{
 			name: "missing object in ref",
 			action: ActionReference{
-				Owner: "owner",
-				Name:  "repo",
+				Owner: "test-owner",
+				Name:  "test-repo",
 			},
-			version: "v4.0.0",
-			setupMocks: func(mux *http.ServeMux, action ActionReference) {
-				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/v4.0.0", action.Owner, action.Name),
-					func(w http.ResponseWriter, r *http.Request) {
-						_, err := fmt.Fprintf(w, `{"ref": "refs/tags/v4.0.0"}`)
-						if err != nil {
-							return
-						}
-					})
-			},
-			wantErr: true,
+			version:    "v4.0.0",
+			serverType: MissingObjectServer,
+			wantErr:    true,
 		},
 		{
 			name: "missing SHA in ref object",
 			action: ActionReference{
-				Owner: "owner",
-				Name:  "repo",
+				Owner: "test-owner",
+				Name:  "test-repo",
 			},
-			version: "v5.0.0",
-			setupMocks: func(mux *http.ServeMux, action ActionReference) {
-				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/v5.0.0", action.Owner, action.Name),
-					func(w http.ResponseWriter, r *http.Request) {
-						_, err := fmt.Fprintf(w, `{
-							"ref": "refs/tags/v5.0.0",
-							"object": {
-								"type": "commit"
-							}
-						}`)
-						if err != nil {
-							return
-						}
-					})
-			},
-			wantErr: true,
+			version:    "v5.0.0",
+			serverType: MissingSHAServer,
+			wantErr:    true,
 		},
 		{
 			name: "annotated tag error",
 			action: ActionReference{
-				Owner: "owner",
-				Name:  "repo",
+				Owner: "test-owner",
+				Name:  "test-repo",
 			},
-			version: "v6.0.0",
-			setupMocks: func(mux *http.ServeMux, action ActionReference) {
-				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/v6.0.0", action.Owner, action.Name),
-					func(w http.ResponseWriter, r *http.Request) {
-						_, err := fmt.Fprintf(w, `{
-							"ref": "refs/tags/v6.0.0",
-							"object": {
-								"sha": "tag456",
-								"type": "tag"
-							}
-						}`)
-						if err != nil {
-							return
-						}
-					})
-				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/tags/tag456", action.Owner, action.Name),
-					func(w http.ResponseWriter, r *http.Request) {
-						http.Error(w, "Server error", http.StatusInternalServerError)
-					})
-			},
-			wantErr: true,
+			version:    "v6.0.0",
+			serverType: AnnotatedTagErrorServer,
+			wantErr:    true,
 		},
 		{
 			name: "missing object in annotated tag",
 			action: ActionReference{
-				Owner: "owner",
-				Name:  "repo",
+				Owner: "test-owner",
+				Name:  "test-repo",
 			},
-			version: "v7.0.0",
-			setupMocks: func(mux *http.ServeMux, action ActionReference) {
-				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/ref/tags/v7.0.0", action.Owner, action.Name),
-					func(w http.ResponseWriter, r *http.Request) {
-						_, err := fmt.Fprintf(w, `{
-							"ref": "refs/tags/v7.0.0",
-							"object": {
-								"sha": "tag789",
-								"type": "tag"
-							}
-						}`)
-						if err != nil {
-							return
-						}
-					})
-				mux.HandleFunc(fmt.Sprintf("/repos/%s/%s/git/tags/tag789", action.Owner, action.Name),
-					func(w http.ResponseWriter, r *http.Request) {
-						_, err := fmt.Fprintf(w, `{"sha": "tag789"}`)
-						if err != nil {
-							return
-						}
-					})
-			},
-			wantErr: true,
+			version:    "v7.0.0",
+			serverType: MissingTagObjectServer,
+			wantErr:    true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks(mux, tt.action)
+			// Create a test server with the appropriate configuration
+			server, checker := SetupVersionTestServer(t, tt.serverType)
+			defer server.Close()
 
 			gotHash, err := checker.GetCommitHash(context.Background(), tt.action, tt.version)
 			if (err != nil) != tt.wantErr {

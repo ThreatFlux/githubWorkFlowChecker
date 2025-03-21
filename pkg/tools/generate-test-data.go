@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,6 +14,29 @@ import (
 
 // osExit is used to make the exit function testable
 var osExit = os.Exit
+
+// fileRemove is used to make the file removal testable
+var fileRemove = os.Remove
+
+// pathValidator is used to make path validation testable
+var pathValidator = validatePath
+
+// tempEngine provides a testable template functionality
+var tempEngine = struct {
+	New     func(string) *template.Template
+	Parse   func(*template.Template, string) (*template.Template, error)
+	Execute func(*template.Template, io.Writer, interface{}) error
+}{
+	New: func(name string) *template.Template {
+		return template.New(name)
+	},
+	Parse: func(t *template.Template, text string) (*template.Template, error) {
+		return t.Parse(text)
+	},
+	Execute: func(t *template.Template, wr io.Writer, data interface{}) error {
+		return t.Execute(wr, data)
+	},
+}
 
 const (
 	workflowTemplate = `name: Workflow {{.Number}}
@@ -153,12 +177,13 @@ func main() {
 	}
 
 	// Remove the dummy file
-	if err := os.Remove(dummyFile); err != nil {
+	if err := fileRemove(dummyFile); err != nil {
 		fmt.Printf(common.ErrCouldNotRemoveDummyFile+"\n", err)
 	}
 
 	// Parse template
-	tmpl, err := template.New("workflow").Option("missingkey=error").Parse(workflowTemplate)
+	tmpl := tempEngine.New("workflow").Option("missingkey=error")
+	tmpl, err = tempEngine.Parse(tmpl, workflowTemplate)
 	if err != nil {
 		fmt.Printf("error generating test data: %v\n", err)
 		SysOutCall()
@@ -210,7 +235,7 @@ func main() {
 
 		// Use a buffer to execute the template
 		var buffer strings.Builder
-		if err := tmpl.Execute(&buffer, data); err != nil {
+		if err := tempEngine.Execute(tmpl, &buffer, data); err != nil {
 			fmt.Printf("error generating test data: %v\n", err)
 			SysOutCall()
 			osExit(1)
