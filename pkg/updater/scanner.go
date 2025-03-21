@@ -355,11 +355,25 @@ func (s *Scanner) parseAliasedNode(node *yaml.Node, aliasLine int, path string, 
 
 	switch node.Kind {
 	case yaml.MappingNode:
+		// First check if this node has a run command
+		hasRunCommand := false
+		for i := 0; i < len(node.Content); i += 2 {
+			if node.Content[i].Value == "run" {
+				hasRunCommand = true
+				break
+			}
+		}
+
 		for i := 0; i < len(node.Content); i += 2 {
 			key := node.Content[i]
 			value := node.Content[i+1]
 
 			if key.Value == "uses" && value.Kind == yaml.ScalarNode {
+				// Skip if it's inside a run command
+				if hasRunCommand {
+					continue
+				}
+
 				// Use the alias line number instead of the original node's line number
 				comments := lineComments[aliasLine]
 				if aliasLine > 0 && lineComments[aliasLine-1] != nil {

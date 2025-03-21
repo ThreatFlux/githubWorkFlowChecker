@@ -171,64 +171,66 @@ func ExecuteWithRetry(ctx context.Context, client *github.Client, maxRetries int
 	}
 }
 
-// GetLatestRelease gets the latest release for a repository with retry logic
-func GetLatestRelease(ctx context.Context, client *github.Client, owner, repo string) (*github.RepositoryRelease, error) {
-	var release *github.RepositoryRelease
+// executeGitHubAPIWithResult is a generic function to execute GitHub API calls with a result and retry logic
+func executeGitHubAPIWithResult[T any](
+	ctx context.Context,
+	client *github.Client,
+	apiFn func() (T, *github.Response, error),
+) (T, error) {
+	var result T
 
 	err := ExecuteWithRetry(ctx, client, 3, time.Second, func() (*github.Response, error) {
 		var resp *github.Response
 		var err error
-		release, resp, err = client.Repositories.GetLatestRelease(ctx, owner, repo)
+		result, resp, err = apiFn()
 		return resp, err
 	})
 
-	return release, err
+	return result, err
+}
+
+// executeGitHubAPIWithNoResult is a generic function to execute GitHub API calls without a result and with retry logic
+func executeGitHubAPIWithNoResult(
+	ctx context.Context,
+	client *github.Client,
+	apiFn func() (*github.Response, error),
+) error {
+	return ExecuteWithRetry(ctx, client, 3, time.Second, apiFn)
+}
+
+// GetLatestRelease gets the latest release for a repository with retry logic
+func GetLatestRelease(ctx context.Context, client *github.Client, owner, repo string) (*github.RepositoryRelease, error) {
+	return executeGitHubAPIWithResult(ctx, client, func() (*github.RepositoryRelease, *github.Response, error) {
+		return client.Repositories.GetLatestRelease(ctx, owner, repo)
+	})
 }
 
 // GetRef gets a reference (branch, tag) with retry logic
 func GetRef(ctx context.Context, client *github.Client, owner, repo, ref string) (*github.Reference, error) {
-	var reference *github.Reference
-
-	err := ExecuteWithRetry(ctx, client, 3, time.Second, func() (*github.Response, error) {
-		var resp *github.Response
-		var err error
-		reference, resp, err = client.Git.GetRef(ctx, owner, repo, ref)
-		return resp, err
+	return executeGitHubAPIWithResult(ctx, client, func() (*github.Reference, *github.Response, error) {
+		return client.Git.GetRef(ctx, owner, repo, ref)
 	})
-
-	return reference, err
 }
 
 // CreateRef creates a reference (branch, tag) with retry logic
 func CreateRef(ctx context.Context, client *github.Client, owner, repo string, ref *github.Reference) error {
-	err := ExecuteWithRetry(ctx, client, 3, time.Second, func() (*github.Response, error) {
+	return executeGitHubAPIWithNoResult(ctx, client, func() (*github.Response, error) {
 		_, resp, err := client.Git.CreateRef(ctx, owner, repo, ref)
 		return resp, err
 	})
-
-	return err
 }
 
 // CreatePullRequest creates a pull request with retry logic
 func CreatePullRequest(ctx context.Context, client *github.Client, owner, repo string, pull *github.NewPullRequest) (*github.PullRequest, error) {
-	var pr *github.PullRequest
-
-	err := ExecuteWithRetry(ctx, client, 3, time.Second, func() (*github.Response, error) {
-		var resp *github.Response
-		var err error
-		pr, resp, err = client.PullRequests.Create(ctx, owner, repo, pull)
-		return resp, err
+	return executeGitHubAPIWithResult(ctx, client, func() (*github.PullRequest, *github.Response, error) {
+		return client.PullRequests.Create(ctx, owner, repo, pull)
 	})
-
-	return pr, err
 }
 
 // AddLabelsToIssue adds labels to an issue or pull request with retry logic
 func AddLabelsToIssue(ctx context.Context, client *github.Client, owner, repo string, number int, labels []string) error {
-	err := ExecuteWithRetry(ctx, client, 3, time.Second, func() (*github.Response, error) {
+	return executeGitHubAPIWithNoResult(ctx, client, func() (*github.Response, error) {
 		_, resp, err := client.Issues.AddLabelsToIssue(ctx, owner, repo, number, labels)
 		return resp, err
 	})
-
-	return err
 }

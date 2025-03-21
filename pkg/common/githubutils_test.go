@@ -167,7 +167,7 @@ func TestExecuteWithRetry(t *testing.T) {
 		t.Errorf("Expected function to be called once, got %d", callCount)
 	}
 
-	// Test with rate limit error
+	// Test with rate limit error and retry
 	callCount = 0
 	err = ExecuteWithRetry(ctx, client, 2, 100*time.Millisecond, func() (*github.Response, error) {
 		callCount++
@@ -208,6 +208,61 @@ func TestExecuteWithRetry(t *testing.T) {
 
 	if err == nil || !errors.Is(err, context.Canceled) {
 		t.Errorf("Expected context.Canceled error, got %v", err)
+	}
+
+	// Test with exhausted rate limit (no retries left)
+	err = ExecuteWithRetry(ctx, client, 0, 100*time.Millisecond, func() (*github.Response, error) {
+		return &github.Response{
+				Response: &http.Response{
+					StatusCode: http.StatusForbidden,
+				},
+				Rate: github.Rate{
+					Remaining: 0,
+					Limit:     5000,
+					Reset:     github.Timestamp{Time: time.Now().Add(1 * time.Hour)},
+				},
+			}, &github.RateLimitError{
+				Message: "API rate limit exceeded",
+			}
+	})
+
+	if err == nil || !strings.Contains(err.Error(), "GitHub API rate limit exceeded") {
+		t.Errorf("Expected rate limit error, got %v", err)
+	}
+
+	// Test with network failure
+	err = ExecuteWithRetry(ctx, client, 0, 100*time.Millisecond, func() (*github.Response, error) {
+		return &github.Response{
+			Response: &http.Response{
+				StatusCode: http.StatusInternalServerError,
+			},
+		}, errors.New("network error")
+	})
+
+	if err == nil || !strings.Contains(err.Error(), "network failure") {
+		t.Errorf("Expected network failure error, got %v", err)
+	}
+
+	// Test with authentication error
+	err = ExecuteWithRetry(ctx, client, 0, 100*time.Millisecond, func() (*github.Response, error) {
+		return &github.Response{
+			Response: &http.Response{
+				StatusCode: http.StatusUnauthorized,
+			},
+		}, errors.New("authentication error")
+	})
+
+	if err == nil || !strings.Contains(err.Error(), "authentication error") {
+		t.Errorf("Expected authentication error, got %v", err)
+	}
+
+	// Test with server error and no rate limit data
+	err = ExecuteWithRetry(ctx, client, 0, 100*time.Millisecond, func() (*github.Response, error) {
+		return nil, errors.New("server error")
+	})
+
+	if err == nil || !strings.Contains(err.Error(), "server error") {
+		t.Errorf("Expected server error, got %v", err)
 	}
 }
 

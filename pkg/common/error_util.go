@@ -115,7 +115,7 @@ const (
 	ErrMissingRequiredFlag   = "missing required flag: %s"
 	ErrInvalidFlagValue      = "invalid value for flag %s: %s"
 	ErrCommandExecution      = "error executing command: %w"
-	ErrNoGithubToken         = "No GitHub token provided. Using public GitHub API with rate limiting. For higher rate limits, provide a token via -token flag or GITHUB_TOKEN environment variable."
+	ErrNoGithubToken         = "No GitHub token provided. Using public GitHub API with rate limiting. For higher rate limits, provide a token via -token flag or GITHUB_TOKEN environment variable." // #nosec G101
 	ErrNoWorkflowsFound      = "No workflow files found"
 	ErrNoUpdatesAvailable    = "No updates available"
 	ErrFailedToParseWorkflow = "Failed to parse %s: %v"
@@ -131,6 +131,10 @@ const (
 	ErrWorkflowCountMustBePositive = "Workflow count must be positive"
 	ErrWorkflowCountExceedsLimit   = "Workflow count exceeds maximum limit of %d"
 	ErrCouldNotRemoveDummyFile     = "Warning: could not remove dummy file: %v"
+)
+
+const (
+	ErrFailedToCloseBody = "Failed to close response body: %v"
 )
 
 // TestFailureErrors contains constants for test failure messages

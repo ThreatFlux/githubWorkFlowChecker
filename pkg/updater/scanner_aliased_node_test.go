@@ -393,3 +393,86 @@ func TestParseAliasedNodeEdgeCases(t *testing.T) {
 		t.Errorf("Expected 2 actions after duplicate with different line, got %d", len(actions))
 	}
 }
+
+func TestParseAliasedNodeExtraTypes(t *testing.T) {
+	// Create a temporary directory for testing
+	tempDir, err := os.MkdirTemp("", "scanner-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			t.Fatalf("Failed to remove temp directory: %v", err)
+		}
+	}(tempDir)
+
+	// Set secure permissions on temp directory
+	if err := os.Chmod(tempDir, 0750); err != nil {
+		t.Fatalf("Failed to set temp dir permissions: %v", err)
+	}
+
+	// Create scanner with temp directory as base
+	scanner := NewScanner(tempDir)
+
+	// Test file path
+	testPath := filepath.Join(tempDir, "workflow.yml")
+
+	// Setup for tests
+	actions := make([]ActionReference, 0)
+	lineComments := make(map[int][]string)
+	seen := make(map[string]bool)
+
+	// Test with a scalar node
+	scalarNode := &yaml.Node{
+		Kind:  yaml.ScalarNode,
+		Value: "just a string",
+	}
+	err = scanner.parseAliasedNode(scalarNode, 1, testPath, &actions, lineComments, seen)
+	if err != nil {
+		t.Errorf("parseAliasedNode with scalar node returned error: %v", err)
+	}
+
+	// Test with a document node (should not be used in practice but should handle gracefully)
+	docNode := &yaml.Node{
+		Kind: yaml.DocumentNode,
+	}
+	err = scanner.parseAliasedNode(docNode, 1, testPath, &actions, lineComments, seen)
+	if err != nil {
+		t.Errorf("parseAliasedNode with document node returned error: %v", err)
+	}
+
+	// Test with non-uses key in mapping
+	nonUsesNode := &yaml.Node{
+		Kind: yaml.MappingNode,
+		Content: []*yaml.Node{
+			{Value: "name", Kind: yaml.ScalarNode},
+			{Value: "Test Step", Kind: yaml.ScalarNode},
+			{Value: "with", Kind: yaml.ScalarNode},
+			{Value: "param", Kind: yaml.ScalarNode},
+		},
+	}
+	err = scanner.parseAliasedNode(nonUsesNode, 1, testPath, &actions, lineComments, seen)
+	if err != nil {
+		t.Errorf("parseAliasedNode with non-uses mapping returned error: %v", err)
+	}
+
+	// Test with a run key in mapping (should skip uses)
+	runNode := &yaml.Node{
+		Kind: yaml.MappingNode,
+		Content: []*yaml.Node{
+			{Value: "run", Kind: yaml.ScalarNode},
+			{Value: "echo test", Kind: yaml.ScalarNode},
+			{Value: "uses", Kind: yaml.ScalarNode},
+			{Value: "actions/checkout@v2", Kind: yaml.ScalarNode},
+		},
+	}
+	prevLen := len(actions)
+	err = scanner.parseAliasedNode(runNode, 1, testPath, &actions, lineComments, seen)
+	if err != nil {
+		t.Errorf("parseAliasedNode with run command returned error: %v", err)
+	}
+	if len(actions) != prevLen {
+		t.Errorf("Expected no new actions for run command, got %d more", len(actions)-prevLen)
+	}
+}

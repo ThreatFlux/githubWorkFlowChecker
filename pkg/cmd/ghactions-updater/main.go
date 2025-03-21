@@ -70,6 +70,8 @@ var (
 	prCreatorFactory = func(token, owner, repo string) updater.PRCreator {
 		return updater.NewPRCreator(token, owner, repo)
 	}
+	// For testing
+	absFunc = filepath.Abs
 )
 
 func run() error {

@@ -5,9 +5,6 @@ import (
 	"path/filepath"
 )
 
-// For testing
-var absFunc = filepath.Abs
-
 // Helper to restore original Abs function
 func restoreAbs() {
 	absFunc = filepath.Abs
