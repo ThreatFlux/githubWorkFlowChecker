@@ -1,7 +1,6 @@
 package updater
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -9,28 +8,11 @@ import (
 )
 
 func TestParseAliasedNode(t *testing.T) {
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "scanner-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer func(path string) {
-		err := os.RemoveAll(path)
-		if err != nil {
-			t.Fatalf("Failed to remove temp directory: %v", err)
-		}
-	}(tempDir)
-
-	// Set secure permissions on temp directory
-	if err := os.Chmod(tempDir, 0750); err != nil {
-		t.Fatalf("Failed to set temp dir permissions: %v", err)
-	}
-
-	// Create scanner with temp directory as base
-	scanner := NewScanner(tempDir)
+	helper := NewScannerTestHelper(t)
+	defer helper.Cleanup()
 
 	// Test file path
-	testPath := filepath.Join(tempDir, "workflow.yml")
+	testPath := filepath.Join(helper.Env.WorkDir, "workflow.yml")
 
 	// Test cases for parseAliasedNode
 	tests := []struct {
@@ -195,7 +177,7 @@ steps:
 			lineComments := make(map[int][]string)
 			seen := make(map[string]bool)
 
-			err := scanner.parseAliasedNode(aliasedNode, tt.aliasLine, testPath, &actions, lineComments, seen)
+			err := helper.Scanner.parseAliasedNode(aliasedNode, tt.aliasLine, testPath, &actions, lineComments, seen)
 			if err != nil {
 				t.Fatalf("parseAliasedNode returned error: %v", err)
 			}
@@ -220,28 +202,8 @@ steps:
 }
 
 func TestParseAliasedNodeWithComments(t *testing.T) {
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "scanner-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer func(path string) {
-		err := os.RemoveAll(path)
-		if err != nil {
-			t.Fatalf("Failed to remove temp directory: %v", err)
-		}
-	}(tempDir)
-
-	// Set secure permissions on temp directory
-	if err := os.Chmod(tempDir, 0750); err != nil {
-		t.Fatalf("Failed to set temp dir permissions: %v", err)
-	}
-
-	// Create scanner with temp directory as base
-	scanner := NewScanner(tempDir)
-
-	// Test file path
-	testPath := filepath.Join(tempDir, "workflow.yml")
+	helper := NewScannerTestHelper(t)
+	defer helper.Cleanup()
 
 	// Create a test workflow file with aliased nodes and comments
 	workflowContent := `name: Test Workflow
@@ -261,13 +223,11 @@ jobs:
       - <<: *common_step
 `
 
-	// Write the test file
-	if err := os.WriteFile(testPath, []byte(workflowContent), 0600); err != nil {
-		t.Fatalf("Failed to write test file: %v", err)
-	}
+	// Create test file
+	testFile := helper.CreateWorkflowFile("workflow.yml", workflowContent, 0600)
 
 	// Parse the workflow file
-	actions, err := scanner.ParseActionReferences(testPath)
+	actions, err := helper.Scanner.ParseActionReferences(testFile)
 	if err != nil {
 		t.Fatalf("ParseActionReferences returned error: %v", err)
 	}
@@ -289,35 +249,18 @@ jobs:
 }
 
 func TestParseAliasedNodeEdgeCases(t *testing.T) {
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "scanner-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer func(path string) {
-		err := os.RemoveAll(path)
-		if err != nil {
-			t.Fatalf("Failed to remove temp directory: %v", err)
-		}
-	}(tempDir)
-
-	// Set secure permissions on temp directory
-	if err := os.Chmod(tempDir, 0750); err != nil {
-		t.Fatalf("Failed to set temp dir permissions: %v", err)
-	}
-
-	// Create scanner with temp directory as base
-	scanner := NewScanner(tempDir)
+	helper := NewScannerTestHelper(t)
+	defer helper.Cleanup()
 
 	// Test file path
-	testPath := filepath.Join(tempDir, "workflow.yml")
+	testPath := filepath.Join(helper.Env.WorkDir, "workflow.yml")
 
 	// Test with nil node
 	actions := make([]ActionReference, 0)
 	lineComments := make(map[int][]string)
 	seen := make(map[string]bool)
 
-	err = scanner.parseAliasedNode(nil, 1, testPath, &actions, lineComments, seen)
+	err := helper.Scanner.parseAliasedNode(nil, 1, testPath, &actions, lineComments, seen)
 	if err != nil {
 		t.Errorf("parseAliasedNode with nil node returned error: %v", err)
 	}
@@ -333,7 +276,7 @@ func TestParseAliasedNodeEdgeCases(t *testing.T) {
 		},
 	}
 
-	err = scanner.parseAliasedNode(emptyNode, 1, testPath, &actions, lineComments, seen)
+	err = helper.Scanner.parseAliasedNode(emptyNode, 1, testPath, &actions, lineComments, seen)
 	if err != nil {
 		t.Errorf("parseAliasedNode with empty node returned error: %v", err)
 	}
@@ -350,7 +293,7 @@ func TestParseAliasedNodeEdgeCases(t *testing.T) {
 		},
 	}
 
-	err = scanner.parseAliasedNode(invalidNode, 1, testPath, &actions, lineComments, seen)
+	err = helper.Scanner.parseAliasedNode(invalidNode, 1, testPath, &actions, lineComments, seen)
 	if err == nil {
 		t.Errorf("Expected error for invalid action reference, got nil")
 	}
@@ -367,7 +310,7 @@ func TestParseAliasedNodeEdgeCases(t *testing.T) {
 	// First add the action
 	actions = make([]ActionReference, 0)
 	seen = make(map[string]bool)
-	err = scanner.parseAliasedNode(duplicateNode, 1, testPath, &actions, lineComments, seen)
+	err = helper.Scanner.parseAliasedNode(duplicateNode, 1, testPath, &actions, lineComments, seen)
 	if err != nil {
 		t.Errorf("parseAliasedNode with valid node returned error: %v", err)
 	}
@@ -376,7 +319,7 @@ func TestParseAliasedNodeEdgeCases(t *testing.T) {
 	}
 
 	// Then try to add it again with the same line number
-	err = scanner.parseAliasedNode(duplicateNode, 1, testPath, &actions, lineComments, seen)
+	err = helper.Scanner.parseAliasedNode(duplicateNode, 1, testPath, &actions, lineComments, seen)
 	if err != nil {
 		t.Errorf("parseAliasedNode with duplicate node returned error: %v", err)
 	}
@@ -385,7 +328,7 @@ func TestParseAliasedNodeEdgeCases(t *testing.T) {
 	}
 
 	// Try to add it again with a different line number
-	err = scanner.parseAliasedNode(duplicateNode, 2, testPath, &actions, lineComments, seen)
+	err = helper.Scanner.parseAliasedNode(duplicateNode, 2, testPath, &actions, lineComments, seen)
 	if err != nil {
 		t.Errorf("parseAliasedNode with duplicate node but different line returned error: %v", err)
 	}
@@ -395,28 +338,11 @@ func TestParseAliasedNodeEdgeCases(t *testing.T) {
 }
 
 func TestParseAliasedNodeExtraTypes(t *testing.T) {
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "scanner-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp directory: %v", err)
-	}
-	defer func(path string) {
-		err := os.RemoveAll(path)
-		if err != nil {
-			t.Fatalf("Failed to remove temp directory: %v", err)
-		}
-	}(tempDir)
-
-	// Set secure permissions on temp directory
-	if err := os.Chmod(tempDir, 0750); err != nil {
-		t.Fatalf("Failed to set temp dir permissions: %v", err)
-	}
-
-	// Create scanner with temp directory as base
-	scanner := NewScanner(tempDir)
+	helper := NewScannerTestHelper(t)
+	defer helper.Cleanup()
 
 	// Test file path
-	testPath := filepath.Join(tempDir, "workflow.yml")
+	testPath := filepath.Join(helper.Env.WorkDir, "workflow.yml")
 
 	// Setup for tests
 	actions := make([]ActionReference, 0)
@@ -428,7 +354,7 @@ func TestParseAliasedNodeExtraTypes(t *testing.T) {
 		Kind:  yaml.ScalarNode,
 		Value: "just a string",
 	}
-	err = scanner.parseAliasedNode(scalarNode, 1, testPath, &actions, lineComments, seen)
+	err := helper.Scanner.parseAliasedNode(scalarNode, 1, testPath, &actions, lineComments, seen)
 	if err != nil {
 		t.Errorf("parseAliasedNode with scalar node returned error: %v", err)
 	}
@@ -437,7 +363,7 @@ func TestParseAliasedNodeExtraTypes(t *testing.T) {
 	docNode := &yaml.Node{
 		Kind: yaml.DocumentNode,
 	}
-	err = scanner.parseAliasedNode(docNode, 1, testPath, &actions, lineComments, seen)
+	err = helper.Scanner.parseAliasedNode(docNode, 1, testPath, &actions, lineComments, seen)
 	if err != nil {
 		t.Errorf("parseAliasedNode with document node returned error: %v", err)
 	}
@@ -452,7 +378,7 @@ func TestParseAliasedNodeExtraTypes(t *testing.T) {
 			{Value: "param", Kind: yaml.ScalarNode},
 		},
 	}
-	err = scanner.parseAliasedNode(nonUsesNode, 1, testPath, &actions, lineComments, seen)
+	err = helper.Scanner.parseAliasedNode(nonUsesNode, 1, testPath, &actions, lineComments, seen)
 	if err != nil {
 		t.Errorf("parseAliasedNode with non-uses mapping returned error: %v", err)
 	}
@@ -468,7 +394,7 @@ func TestParseAliasedNodeExtraTypes(t *testing.T) {
 		},
 	}
 	prevLen := len(actions)
-	err = scanner.parseAliasedNode(runNode, 1, testPath, &actions, lineComments, seen)
+	err = helper.Scanner.parseAliasedNode(runNode, 1, testPath, &actions, lineComments, seen)
 	if err != nil {
 		t.Errorf("parseAliasedNode with run command returned error: %v", err)
 	}

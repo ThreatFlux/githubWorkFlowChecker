@@ -31,19 +31,19 @@ func TestScanWorkflows(t *testing.T) {
 
 	// Create a test workflow file
 	testWorkflow := filepath.Join(workflowsDir, "test.yml")
-	if err := os.WriteFile(testWorkflow, []byte("name: Test"), 0644); err != nil {
+	if err := os.WriteFile(testWorkflow, []byte("name: Test"), 0600); err != nil {
 		t.Fatalf("Failed to create test workflow file: %v", err)
 	}
 
 	// Create another workflow file with .yaml extension
 	testWorkflow2 := filepath.Join(workflowsDir, "test2.yaml")
-	if err := os.WriteFile(testWorkflow2, []byte("name: Test2"), 0644); err != nil {
+	if err := os.WriteFile(testWorkflow2, []byte("name: Test2"), 0600); err != nil {
 		t.Fatalf("Failed to create test workflow file: %v", err)
 	}
 
 	// Create a non-workflow file
 	nonWorkflow := filepath.Join(workflowsDir, "test.txt")
-	if err := os.WriteFile(nonWorkflow, []byte("Not a workflow"), 0644); err != nil {
+	if err := os.WriteFile(nonWorkflow, []byte("Not a workflow"), 0600); err != nil {
 		t.Fatalf("Failed to create non-workflow file: %v", err)
 	}
 
@@ -55,7 +55,7 @@ func TestScanWorkflows(t *testing.T) {
 
 	// Create a workflow file in the nested directory
 	nestedWorkflow := filepath.Join(nestedDir, "nested.yml")
-	if err := os.WriteFile(nestedWorkflow, []byte("name: Nested"), 0644); err != nil {
+	if err := os.WriteFile(nestedWorkflow, []byte("name: Nested"), 0600); err != nil {
 		t.Fatalf("Failed to create nested workflow file: %v", err)
 	}
 

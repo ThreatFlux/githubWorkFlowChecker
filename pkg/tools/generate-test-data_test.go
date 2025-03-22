@@ -89,21 +89,21 @@ func TestWorkflowGeneration(t *testing.T) {
 
 			if tt.wantErr {
 				if exitCode == 0 {
-					t.Error("Expected program to exit with error")
+					t.Error("expected program to exit with error")
 				}
 				if !tt.errCheck(output) {
-					t.Errorf("Expected error message about maximum limit, got: %q", output)
+					t.Errorf("expected error message about maximum limit, got: %q", output)
 				}
 				return
 			}
 
 			if exitCode != 0 {
-				t.Errorf("Expected program to succeed, got exit code %d with output: %q", exitCode, output)
+				t.Errorf("expected program to succeed, got exit code %d with output: %q", exitCode, output)
 				return
 			}
 
 			if !tt.errCheck(output) {
-				t.Errorf("Expected success message, got: %q", output)
+				t.Errorf("expected success message, got: %q", output)
 				return
 			}
 
@@ -115,7 +115,7 @@ func TestWorkflowGeneration(t *testing.T) {
 
 			count := len(files)
 			if count != tt.workflowCount {
-				t.Errorf("Expected %d workflow files, got %d", tt.workflowCount, count)
+				t.Errorf("expected %d workflow files, got %d", tt.workflowCount, count)
 			}
 
 			// Verify file contents
@@ -166,12 +166,12 @@ func TestInvalidArguments(t *testing.T) {
 		{
 			name:    "negative workflow count",
 			args:    []string{"cmd", "output-dir", "-1"},
-			wantErr: "Workflow count must be positive",
+			wantErr: "workflow count must be positive",
 		},
 		{
 			name:    "zero workflow count",
 			args:    []string{"cmd", "output-dir", "0"},
-			wantErr: "Workflow count must be positive",
+			wantErr: "workflow count must be positive",
 		},
 		{
 			name:    "non-numeric workflow count",
@@ -191,11 +191,11 @@ func TestInvalidArguments(t *testing.T) {
 
 			exitCode, output := runWithExit(main)
 			if exitCode == 0 {
-				t.Error("Expected program to exit with error")
+				t.Error("expected program to exit with error")
 			}
 
 			if !strings.Contains(output, tt.wantErr) {
-				t.Errorf("Expected error message containing %q, got %q", tt.wantErr, output)
+				t.Errorf("expected error message containing %q, got %q", tt.wantErr, output)
 			}
 		})
 	}
@@ -272,7 +272,7 @@ jobs:
 
 			if tt.wantErr {
 				if err == nil {
-					t.Error("Expected template execution error, got nil")
+					t.Error("expected template execution error, got nil")
 				}
 			} else {
 				if err != nil {

@@ -7,20 +7,6 @@ import (
 // These additional test cases specifically target the error paths in RunTableTests
 // to increase the code coverage.
 
-// Define test types to use with generics
-type testInput struct { //nolint:unused
-	Value int
-}
-
-type testResult struct { //nolint:unused
-	Value int
-}
-
-// TestCase implementation for our tests
-type myTestCase struct { //nolint:unused
-	TestCase
-}
-
 // Direct test of the contains function
 func TestContainsEdgeCases(t *testing.T) {
 	tests := []struct {

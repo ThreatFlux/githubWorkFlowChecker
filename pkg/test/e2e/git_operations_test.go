@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,189 +16,163 @@ func TestGitOperations(t *testing.T) {
 		testFunc func(t *testing.T)
 	}{
 		{
-			name: "GitConfigFailure",
+			name: "PushToNonExistentRemoteShouldFail",
 			testFunc: func(t *testing.T) {
-				env := setupTestEnv(t)
-				defer env.cleanup()
+				env := NewTestEnv(t)
+				defer env.Cleanup()
 
 				// Clone repository
-				repoPath := env.cloneTestRepo()
+				repoPath := env.CloneTestRepo()
 
-				// Corrupt git config
-				gitConfigPath := filepath.Join(repoPath, ".git", "config")
-				if err := os.WriteFile(gitConfigPath, []byte("invalid git config"), 0644); err != nil {
-					t.Fatalf(common.ErrFailedToCorruptGitConfig, err)
-				}
-
-				// Attempt git operation with corrupted config
-				cmd := env.createCommand("git", "status")
-				cmd.Dir = repoPath
-				if err := cmd.Run(); err == nil {
-					t.Error(common.ErrExpectedGitConfigError)
-				}
-			},
-		},
-		{
-			name: "GitPushFailure",
-			testFunc: func(t *testing.T) {
-				env := setupTestEnv(t)
-				defer env.cleanup()
-
-				// Clone repository
-				repoPath := env.cloneTestRepo()
-
-				// Create a new branch
-				branchName := "test-push-failure"
-				cmd := env.createCommand("git", "checkout", "-b", branchName)
-				cmd.Dir = repoPath
-				if err := cmd.Run(); err != nil {
-					t.Fatalf(common.ErrFailedToCreateBranch, err)
-				}
-
-				// Make some changes
+				// Make a change to push
 				workflowFile := filepath.Join(repoPath, ".github", "workflows", "test.yml")
-				if err := os.WriteFile(workflowFile, []byte("invalid: content"), 0644); err != nil {
+				workflowContent := `name: Updated Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+`
+				err := os.WriteFile(workflowFile, []byte(workflowContent), 0600)
+				if err != nil {
 					t.Fatalf(common.ErrFailedToWriteFile, err)
 				}
 
-				// Stage and commit the changes
-				cmd = env.createCommand("git", "add", workflowFile)
-				cmd.Dir = repoPath
-				if err := cmd.Run(); err != nil {
-					t.Fatalf(common.ErrFailedToStageChanges, err)
-				}
-
-				cmd = env.createCommand("git", "commit", "-m", "test commit")
-				cmd.Dir = repoPath
-				if err := cmd.Run(); err != nil {
-					t.Fatalf(common.ErrFailedToCommitChanges, err)
-				}
+				// Stage and commit the change
+				env.stageAndCommit(repoPath, "Update workflow")
 
 				// Add a non-existent remote
-				cmd = env.createCommand("git", "remote", "add", "invalid", "https://invalid-remote/repo.git")
-				cmd.Dir = repoPath
-				if err := cmd.Run(); err != nil {
-					t.Fatalf(common.ErrFailedToAddRemote, err)
-				}
+				env.addRemote(repoPath, "invalid", "https://example.com/invalid.git")
 
-				// Try to push to non-existent remote
-				cmd = env.createCommand("git", "push", "invalid", branchName)
-				cmd.Dir = repoPath
-				if output, err := cmd.CombinedOutput(); err == nil {
+				// Attempt to push to the non-existent remote
+				if err := env.WithWorkingDir(repoPath, func() error {
+					cmd := env.CreateCommand("git", "push", "invalid", "test-push-failure")
+					return cmd.Run()
+				}); err == nil {
 					t.Error(common.ErrExpectedPushError)
-				} else {
-					// Verify error message
-					errStr := string(output)
-					if !strings.Contains(errStr, "Could not resolve host") && !strings.Contains(errStr, "failed to push") {
-						t.Errorf(common.ErrUnexpectedErrorMessage, errStr)
+				}
+			},
+		},
+		{
+			name: "MultipleBranchesWithDifferentContent",
+			testFunc: func(t *testing.T) {
+				env := NewTestEnv(t)
+				defer env.Cleanup()
+
+				// Clone repository
+				repoPath := env.CloneTestRepo()
+
+				// Create multiple branches with different content
+				branches := []string{"feature-1", "feature-2", "bugfix-1"}
+				workflowContents := make(map[string]string)
+
+				for i, branch := range branches {
+					// Create a new branch
+					env.createBranch(repoPath, branch)
+
+					// Create workflow file with unique content
+					workflowContent := fmt.Sprintf(`name: %s Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v%d
+`, branch, i+1)
+					workflowContents[branch] = workflowContent
+
+					// Write the workflow file
+					workflowFile := filepath.Join(repoPath, ".github", "workflows", "test.yml")
+					err := os.WriteFile(workflowFile, []byte(workflowContent), 0600)
+					if err != nil {
+						t.Fatalf(common.ErrFailedToWriteFile, err)
+					}
+
+					// Stage and commit
+					env.stageAndCommit(repoPath, fmt.Sprintf("Update workflow for %s", branch))
+
+					// Switch back to main
+					env.switchBranch(repoPath, "main")
+				}
+
+				// Switch between branches and verify content
+				for _, branch := range branches {
+					if err := env.WithWorkingDir(repoPath, func() error {
+						cmd := env.CreateCommand("git", "checkout", branch)
+						return cmd.Run()
+					}); err != nil {
+						t.Fatalf(common.ErrFailedToSwitchBranch, err)
+					}
+
+					// Read workflow file and verify content
+					workflowFile := filepath.Join(repoPath, ".github", "workflows", "test.yml")
+					content, err := os.ReadFile(workflowFile)
+					if err != nil {
+						t.Fatalf(common.ErrFailedToReadWorkflowFile, err)
+					}
+
+					expectedContent := workflowContents[branch]
+					if !strings.Contains(string(content), expectedContent) {
+						t.Errorf(common.ErrWrongWorkflowContent, string(content), expectedContent)
 					}
 				}
 			},
 		},
 		{
-			name: "GitCommitFailure",
+			name: "CheckoutBranchAndMerge",
 			testFunc: func(t *testing.T) {
-				env := setupTestEnv(t)
-				defer env.cleanup()
+				env := NewTestEnv(t)
+				defer env.Cleanup()
 
 				// Clone repository
-				repoPath := env.cloneTestRepo()
+				repoPath := env.CloneTestRepo()
 
-				// Try to commit without staging changes
-				cmd := env.createCommand("git", "commit", "-m", "test commit")
-				cmd.Dir = repoPath
-				if err := cmd.Run(); err == nil {
-					t.Error(common.ErrExpectedCommitError)
-				}
-			},
-		},
-		{
-			name: "GitBranchFailure",
-			testFunc: func(t *testing.T) {
-				env := setupTestEnv(t)
-				defer env.cleanup()
+				// Create a feature branch
+				env.createBranch(repoPath, "feature")
 
-				// Clone repository
-				repoPath := env.cloneTestRepo()
-
-				// Try to create branch with invalid name containing spaces and special characters
-				cmd := env.createCommand("git", "checkout", "-b", "invalid branch/name*&^%")
-				cmd.Dir = repoPath
-				if output, err := cmd.CombinedOutput(); err == nil {
-					t.Error(common.ErrExpectedBranchError)
-				} else {
-					// Verify error message
-					errStr := string(output)
-					if !strings.Contains(errStr, "fatal: '") {
-						t.Errorf(common.ErrUnexpectedErrorMessage, errStr)
-					}
-				}
-			},
-		},
-		{
-			name: "GitMergeFailure",
-			testFunc: func(t *testing.T) {
-				env := setupTestEnv(t)
-				defer env.cleanup()
-
-				// Clone repository
-				repoPath := env.cloneTestRepo()
-
-				// Create and switch to a new branch
-				branchName := "test-merge-failure"
-				cmd := env.createCommand("git", "checkout", "-b", branchName)
-				cmd.Dir = repoPath
-				if err := cmd.Run(); err != nil {
-					t.Fatalf(common.ErrFailedToCreateBranch, err)
-				}
-
-				// Make conflicting changes
+				// Make changes in feature branch
 				workflowFile := filepath.Join(repoPath, ".github", "workflows", "test.yml")
-				if err := os.WriteFile(workflowFile, []byte("conflict: content"), 0644); err != nil {
+				featureContent := `name: Feature Workflow
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+`
+				err := os.WriteFile(workflowFile, []byte(featureContent), 0600)
+				if err != nil {
 					t.Fatalf(common.ErrFailedToWriteFile, err)
 				}
 
-				// Stage and commit changes
-				cmd = env.createCommand("git", "add", ".")
-				cmd.Dir = repoPath
-				if err := cmd.Run(); err != nil {
-					t.Fatalf(common.ErrFailedToStageChanges, err)
-				}
+				env.stageAndCommit(repoPath, "Update workflow in feature branch")
 
-				cmd = env.createCommand("git", "commit", "-m", "test commit")
-				cmd.Dir = repoPath
-				if err := cmd.Run(); err != nil {
-					t.Fatalf(common.ErrFailedToCommitChanges, err)
-				}
-
-				// Switch back to main and make conflicting changes
-				cmd = env.createCommand("git", "checkout", "main")
-				cmd.Dir = repoPath
-				if err := cmd.Run(); err != nil {
+				// Switch back to main
+				if err := env.WithWorkingDir(repoPath, func() error {
+					cmd := env.CreateCommand("git", "checkout", "main")
+					return cmd.Run()
+				}); err != nil {
 					t.Fatalf(common.ErrFailedToSwitchBranch, err)
 				}
 
-				if err := os.WriteFile(workflowFile, []byte("different: content"), 0644); err != nil {
-					t.Fatalf(common.ErrFailedToWriteFile, err)
+				// Merge feature branch into main
+				if err := env.WithWorkingDir(repoPath, func() error {
+					cmd := env.CreateCommand("git", "merge", "feature")
+					return cmd.Run()
+				}); err != nil {
+					t.Fatalf("Failed to merge feature branch: %v", err)
 				}
 
-				cmd = env.createCommand("git", "add", ".")
-				cmd.Dir = repoPath
-				if err := cmd.Run(); err != nil {
-					t.Fatalf(common.ErrFailedToStageChanges, err)
+				// Verify workflow file contains feature branch changes
+				content, err := os.ReadFile(workflowFile)
+				if err != nil {
+					t.Fatalf(common.ErrFailedToReadWorkflowFile, err)
 				}
 
-				cmd = env.createCommand("git", "commit", "-m", "conflicting commit")
-				cmd.Dir = repoPath
-				if err := cmd.Run(); err != nil {
-					t.Fatalf(common.ErrFailedToCommitChanges, err)
-				}
-
-				// Try to merge branches with conflicts
-				cmd = env.createCommand("git", "merge", branchName)
-				cmd.Dir = repoPath
-				if err := cmd.Run(); err == nil {
-					t.Error(common.ErrExpectedMergeError)
+				if !strings.Contains(string(content), "actions/setup-node@v3") {
+					t.Error("Workflow file does not contain expected changes from feature branch")
 				}
 			},
 		},

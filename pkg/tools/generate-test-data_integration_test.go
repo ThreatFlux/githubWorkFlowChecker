@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"strings"
@@ -481,7 +482,12 @@ func TestFileOperationErrors(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create test directory: %v", err)
 			}
-			defer os.RemoveAll(testDir)
+			defer func(path string) {
+				err := os.RemoveAll(path)
+				if err != nil {
+					require.NoError(t, err)
+				}
+			}(testDir)
 
 			// Setup the test case
 			if err := tt.setup(testDir); err != nil {

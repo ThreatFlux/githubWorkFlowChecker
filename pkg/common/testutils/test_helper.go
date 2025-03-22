@@ -63,6 +63,19 @@ func RunTableTests[T any, E any](t *testing.T, tests []TestCase, testFunc func(t
 	}
 }
 
+// TempDirHelper handles common temporary directory management for tests
+type TempDirHelper struct {
+	*BaseTestEnvironment
+}
+
+// NewTempDirHelper creates a new temporary directory helper for tests
+func NewTempDirHelper(t *testing.T, prefix string) *TempDirHelper {
+	base := NewBaseTestEnvironment(t, prefix)
+	return &TempDirHelper{
+		BaseTestEnvironment: base,
+	}
+}
+
 // name returns the test case name, or generates a default one
 func (tc TestCase) name() string {
 	if tc.Name != "" {

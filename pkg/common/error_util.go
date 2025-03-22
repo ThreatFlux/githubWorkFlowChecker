@@ -2,7 +2,7 @@ package common
 
 // PathValidationErrors contains constants for path validation error messages
 const (
-	// Base directory errors
+	// ErrBaseDirectoryNotSet Base directory errors
 	ErrBaseDirectoryNotSet      = "base directory not set"
 	ErrEmptyPath                = "path is empty"
 	ErrPathContainsNullBytes    = "path contains null bytes"
@@ -13,14 +13,14 @@ const (
 	ErrFailedToDetermineRelPath = "failed to determine relative path: %w"
 	ErrPathTraversalDetected    = "path traversal attempt detected"
 
-	// Symlink related errors
+	// ErrFailedToEvaluateSymlink Symlink related errors
 	ErrFailedToEvaluateSymlink  = "failed to evaluate symlink: %w"
 	ErrFailedToEvalBaseDir      = "failed to evaluate base directory: %w"
 	ErrFailedToResolveSymTarget = "failed to resolve symlink target path: %w"
 	ErrFailedToResolveEvalBase  = "failed to resolve evaluated base path: %w"
 	ErrSymlinkOutsideAllowedDir = "symlink points outside allowed directory: path is outside of allowed directory: %s"
 
-	// File access errors
+	// ErrPathDoesNotExist File access errors
 	ErrPathDoesNotExist   = "path does not exist: %s"
 	ErrFailedToAccessPath = "failed to access path: %w"
 	ErrNotRegularFile     = "not a regular file: %s"
@@ -57,13 +57,13 @@ const (
 
 // TestErrors contains constants for test error messages - these maintain capitalization from the original test file
 const (
-	ErrFailedToRemoveTempDir  = "Failed to remove temp directory: %v"
-	ErrFailedToCreateTempDir  = "Failed to create temp directory: %v"
-	ErrFailedToCreateSubdir   = "Failed to create subdirectory: %v"
-	ErrFailedToCreateTestFile = "Failed to create test file: %v"
-	ErrFailedToRemoveSymlink  = "Failed to remove symlink: %v"
-	ErrFailedToGetWorkingDir  = "Failed to get current working directory: %v"
-	ErrFailedToChangeTempDir  = "Failed to change to temporary directory: %v"
+	ErrFailedToRemoveTempDir  = "failed to remove temp directory: %v"
+	ErrFailedToCreateTempDir  = "failed to create temp directory: %v"
+	ErrFailedToCreateSubdir   = "failed to create subdirectory: %v"
+	ErrFailedToCreateTestFile = "failed to create test file: %v"
+	ErrFailedToRemoveSymlink  = "failed to remove symlink: %v"
+	ErrFailedToGetWorkingDir  = "failed to get current working directory: %v"
+	ErrFailedToChangeTempDir  = "failed to change to temporary directory: %v"
 )
 
 // VersionCheckerErrors contains constants for version checker error messages
@@ -99,124 +99,111 @@ const (
 	ErrApplyingUpdates   = "error applying updates: %w"
 )
 
-// GitHubErrors contains constants for GitHub utility error messages
 const (
-	ErrCreatingGitHubClient = "error creating GitHub client: %w"
-	ErrAuthentication       = "authentication error: %w"
-	ErrNetworkFailure       = "network failure: %w"
-	ErrRateLimitExceeded    = "GitHub API rate limit exceeded: %w"
-	ErrNoRateLimitInfo      = "No rate limit information available"
-	ErrRateLimitFormat      = "Rate limit: %d/%d, resets in %s"
-	ErrInvalidEnterpriseURL = "invalid enterprise URL: %w"
+	ErrAuthentication    = "authentication error: %w"
+	ErrNetworkFailure    = "network failure: %w"
+	ErrRateLimitExceeded = "GitHub API rate limit exceeded: %w"
+	ErrNoRateLimitInfo   = "no rate limit information available"
+	ErrRateLimitFormat   = "Rate limit: %d/%d, resets in %s"
 )
 
-// CommandErrors contains constants for command line errors
 const (
-	ErrMissingRequiredFlag   = "missing required flag: %s"
-	ErrInvalidFlagValue      = "invalid value for flag %s: %s"
-	ErrCommandExecution      = "error executing command: %w"
-	ErrNoGithubToken         = "No GitHub token provided. Using public GitHub API with rate limiting. For higher rate limits, provide a token via -token flag or GITHUB_TOKEN environment variable." // #nosec G101
-	ErrNoWorkflowsFound      = "No workflow files found"
-	ErrNoUpdatesAvailable    = "No updates available"
-	ErrFailedToParseWorkflow = "Failed to parse %s: %v"
-	ErrFailedToCheckAction   = "Failed to check %s/%s: %v"
-	ErrFailedToCheckUpdate   = "Failed to check update availability for %s/%s: %v"
-	ErrFailedToCreateUpdate  = "Failed to create update for %s/%s: %v"
+	ErrMissingRequiredFlag = "missing required flag: %s"
+	ErrInvalidFlagValue    = "invalid value for flag %s: %s"
+	ErrCommandExecution    = "error executing command: %w"
+	ErrNoGithubToken       = "no GitHub token provided. Using public GitHub API with rate limiting. For higher rate limits, provide a token via -token flag or GITHUB_TOKEN environment variable." // #nosec G101
+	ErrNoWorkflowsFound    = "no workflow files found"
+	ErrNoUpdatesAvailable  = "no updates available"
+
+	ErrFailedToCheckAction  = "failed to check %s/%s: %v"
+	ErrFailedToCheckUpdate  = "failed to check update availability for %s/%s: %v"
+	ErrFailedToCreateUpdate = "failed to create update for %s/%s: %v"
 )
 
-// TestToolErrors contains constants for test tool error messages
 const (
-	ErrGeneratingTestData          = "error generating test data: %w"
 	ErrInvalidTestParameters       = "invalid test parameters: %s"
-	ErrWorkflowCountMustBePositive = "Workflow count must be positive"
-	ErrWorkflowCountExceedsLimit   = "Workflow count exceeds maximum limit of %d"
+	ErrWorkflowCountMustBePositive = "workflow count must be positive"
+	ErrWorkflowCountExceedsLimit   = "workflow count exceeds maximum limit of %d"
 	ErrCouldNotRemoveDummyFile     = "Warning: could not remove dummy file: %v"
+	ErrFailedToParseWorkflow       = "failed to parse %s: %v"
 )
 
 const (
-	ErrFailedToCloseBody = "Failed to close response body: %v"
+	ErrFailedToCloseBody = "failed to close response body: %v"
 )
 
-// TestFailureErrors contains constants for test failure messages
 const (
-	// Repository operation failures
-	ErrFailedToCreateRepoDir      = "Failed to create repo directory: %v"
-	ErrFailedToCreateWorkflowsDir = "Failed to create workflows directory: %v"
-	ErrFailedToChangePermissions  = "Failed to make directory read-only: %v"
-	ErrFailedToRestorePermissions = "Failed to restore directory permissions: %v"
-	ErrFailedToWriteWorkflowFile  = "Failed to write invalid workflow file: %v"
+	// ErrFailedToCreateRepoDir Repository operation failures
+	ErrFailedToCreateRepoDir      = "failed to create repo directory: %v"
+	ErrFailedToCreateWorkflowsDir = "failed to create workflows directory: %v"
+	ErrFailedToChangePermissions  = "failed to make directory read-only: %v"
+	ErrFailedToRestorePermissions = "failed to restore directory permissions: %v"
+	ErrFailedToWriteWorkflowFile  = "failed to write invalid workflow file: %v"
 
-	// Git operation failures
-	ErrFailedToCloneRepo        = "Failed to clone repository: %v"
-	ErrFailedToCommitChanges    = "Failed to commit changes: %v"
-	ErrFailedToPushChanges      = "Failed to push changes: %v"
-	ErrFailedToCorruptGitConfig = "Failed to corrupt git config: %v"
-	ErrFailedToCreateBranch     = "Failed to create branch: %v"
-	ErrFailedToWriteFile        = "Failed to write file: %v"
-	ErrFailedToStageChanges     = "Failed to stage changes: %v"
-	ErrFailedToAddRemote        = "Failed to add remote: %v"
-	ErrFailedToSwitchBranch     = "Failed to switch branch: %v"
+	// ErrFailedToCloneRepo Git operation failures
+	ErrFailedToCloneRepo     = "failed to clone repository: %v"
+	ErrFailedToCommitChanges = "failed to commit changes: %v"
+	ErrFailedToPushChanges   = "failed to push changes: %v"
 
-	// Setup/Cleanup failures
-	ErrFailedToSetupTestEnv   = "Failed to set up test environment: %v"
-	ErrFailedToCleanupTestEnv = "Failed to clean up test environment: %v"
+	ErrFailedToCreateBranch = "failed to create branch: %v"
+	ErrFailedToWriteFile    = "failed to write file: %v"
 
-	// Validation failures
-	ErrExpectedError           = "Expected error %s, got nil"
-	ErrUnexpectedError         = "Expected no error, got: %v"
-	ErrExpectedResult          = "Expected result %v, got %v"
-	ErrExpectedGitConfigError  = "Expected error with corrupted git config, got nil"
-	ErrExpectedPushError       = "Expected error when pushing to non-existent remote, got nil"
-	ErrUnexpectedErrorMessage  = "Unexpected error message: %s"
-	ErrExpectedCommitError     = "Expected error when committing without staged changes, got nil"
-	ErrExpectedBranchError     = "Expected error when creating branch with invalid name, got nil"
-	ErrExpectedMergeError      = "Expected error when merging conflicting branches, got nil"
-	ErrExpectedErrorContaining = "Expected error containing %q, got %q"
+	ErrFailedToAddRemote    = "failed to add remote: %v"
+	ErrFailedToSwitchBranch = "failed to switch branch: %v"
 
-	// Version checker test errors
+	// ErrExpectedError Validation failures
+	ErrExpectedError   = "expected error %s, got nil"
+	ErrUnexpectedError = "expected no error, got: %v"
+	ErrExpectedResult  = "expected result %v, got %v"
+
+	ErrExpectedPushError = "expected error when pushing to non-existent remote, got nil"
+
+	ErrExpectedErrorContaining = "expected error containing %q, got %q"
+
+	// ErrVersionCheckerNil Version checker test errors
 	ErrVersionCheckerNil       = "NewDefaultVersionChecker() returned nil"
 	ErrVersionCheckerClientNil = "NewDefaultVersionChecker() client is nil"
-	ErrExpectedAuthClient      = "Expected authenticated client, got unauthenticated"
-	ErrExpectedUnauthClient    = "Expected unauthenticated client, got authenticated"
+	ErrExpectedAuthClient      = "expected authenticated client, got unauthenticated"
+	ErrExpectedUnauthClient    = "expected unauthenticated client, got authenticated"
 
-	// File update test failures
-	ErrFailedToReadUpdatedFile      = "Failed to read updated file: %v"
-	ErrExpectedContentNotFound      = "Expected %q to be in the updated content, but it wasn't.\nUpdated content:\n%s"
-	ErrExpectedNonExistentFileError = "Expected error for non-existent file, got nil"
-	ErrExpectedInvalidLineError     = "Expected error for invalid line number, got nil"
-	ErrFailedToRemoveTestFile       = "Failed to remove test file: %v"
-	ErrExpectedOutsidePathError     = "Expected error for file outside base directory, got nil"
-	ErrExpectedReadOnlyFileError    = "Expected error for read-only file, but got nil. This might be system-dependent."
-	ErrFailedToCreateEmptyFile      = "Failed to create empty file: %v"
-	ErrFailedToReadEmptyFile        = "Failed to read empty file after update: %v"
-	ErrExpectedVersionComment       = "Expected empty file to contain version comment, got content: %s"
-	ErrFailedToCreateSpecialFile    = "Failed to create special file: %v"
-	ErrFailedToReadSpecialFile      = "Failed to read updated special file: %v"
-	ErrFailedToCreateSameLineFile   = "Failed to create same line file: %v"
-	ErrFailedToReadSameLineFile     = "Failed to read updated same line file: %v"
+	// ErrFailedToReadUpdatedFile File update test failures
+	ErrFailedToReadUpdatedFile      = "failed to read updated file: %v"
+	ErrExpectedContentNotFound      = "expected %q to be in the updated content, but it wasn't.\nUpdated content:\n%s"
+	ErrExpectedNonExistentFileError = "expected error for non-existent file, got nil"
+	ErrExpectedInvalidLineError     = "expected error for invalid line number, got nil"
+	ErrFailedToRemoveTestFile       = "failed to remove test file: %v"
+	ErrExpectedOutsidePathError     = "expected error for file outside base directory, got nil"
+	ErrExpectedReadOnlyFileError    = "expected error for read-only file, but got nil. This might be system-dependent."
+	ErrFailedToCreateEmptyFile      = "failed to create empty file: %v"
+	ErrFailedToReadEmptyFile        = "failed to read empty file after update: %v"
+	ErrExpectedVersionComment       = "expected empty file to contain version comment, got content: %s"
+	ErrFailedToCreateSpecialFile    = "failed to create special file: %v"
+	ErrFailedToReadSpecialFile      = "failed to read updated special file: %v"
+	ErrFailedToCreateSameLineFile   = "failed to create same line file: %v"
+	ErrFailedToReadSameLineFile     = "failed to read updated same line file: %v"
 
-	// Scanner test errors
-	ErrFailedToSetTempDirPermissions = "Failed to set temp dir permissions: %v"
-	ErrFailedToSetupTest             = "Failed to set up test: %v"
-	ErrExpectedActions               = "Expected %d actions, got %d"
-	ErrExpectedWorkflows             = "Expected %d workflows, got %d"
-	ErrExpectedEmptyCommitHash       = "Expected empty commit hash for %s, got %q"
-	ErrExpectedCommitHash            = "Expected commit hash %s, got %q"
-	ErrExpectedVersionFromComment    = "Expected version %s from comment, got %q"
-	ErrFailedToCreateTestFileNamed   = "Failed to create test file %s: %v"
-	ErrSpecificWorkflowNotFound      = "%s not found"
-	ErrUnexpectedWorkflowFile        = "Unexpected workflow file: %s"
-	ErrUnexpectedActionFound         = "Unexpected action: %s/%s@%s"
+	ErrFailedToSetupTest           = "failed to set up test: %v"
+	ErrExpectedActions             = "expected %d actions, got %d"
+	ErrExpectedWorkflows           = "expected %d workflows, got %d"
+	ErrExpectedEmptyCommitHash     = "expected empty commit hash for %s, got %q"
+	ErrExpectedCommitHash          = "expected commit hash %s, got %q"
+	ErrExpectedVersionFromComment  = "expected version %s from comment, got %q"
+	ErrFailedToCreateTestFileNamed = "failed to create test file %s: %v"
+	ErrSpecificWorkflowNotFound    = "%s not found"
+	ErrUnexpectedWorkflowFile      = "unexpected workflow file: %s"
+	ErrUnexpectedActionFound       = "unexpected action: %s/%s@%s"
 
-	// Additional test failures
-	ErrWorkDirNotCreated             = "Work directory not created: %v"
-	ErrWrongDirectoryPermissions     = "Wrong directory permissions: got %v, want %v"
-	ErrWorkDirNotCleanedUp           = "Work directory not cleaned up properly"
-	ErrFailedToReadGitConfig         = "Failed to read git config: %v"
-	ErrGitConfigMissingValue         = "Git config missing expected value: %s"
-	ErrExpectedDifferentPaths        = "Expected different repo paths for separate clones"
-	ErrWorkflowFileNotFound          = "Workflow file not found in %s"
-	ErrFailedToStatFile              = "Failed to stat file: %v"
-	ErrWorkflowMissingContent        = "Workflow file missing expected content: %s"
-	ErrFailedToChangeFilePermissions = "Failed to change file permissions: %v"
+	// ErrWorkDirNotCreated Additional test failures
+	ErrWorkDirNotCreated             = "work directory not created: %v"
+	ErrWrongDirectoryPermissions     = "wrong directory permissions: got %v, want %v"
+	ErrWorkDirNotCleanedUp           = "work directory not cleaned up properly"
+	ErrFailedToReadGitConfig         = "failed to read git config: %v"
+	ErrGitConfigMissingValue         = "git config missing expected value: %s"
+	ErrExpectedDifferentPaths        = "expected different repo paths for separate clones"
+	ErrWorkflowFileNotFound          = "workflow file not found in %s"
+	ErrFailedToStatFile              = "failed to stat file: %v"
+	ErrWorkflowMissingContent        = "workflow file missing expected content: %s"
+	ErrFailedToChangeFilePermissions = "failed to change file permissions: %v"
+	ErrFailedToReadWorkflowFile      = "failed to read workflow file: %v"
+	ErrWrongWorkflowContent          = "wrong workflow content: got %s, expected %s"
 )

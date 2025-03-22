@@ -35,7 +35,7 @@ jobs:
       - uses: actions/cache@v2
 `
 	workflowPath := filepath.Join(tempDir, "workflow.yml")
-	if err := os.WriteFile(workflowPath, []byte(workflowContent), 0644); err != nil {
+	if err := os.WriteFile(workflowPath, []byte(workflowContent), 0600); err != nil {
 		t.Fatalf("Failed to create test workflow file: %v", err)
 	}
 

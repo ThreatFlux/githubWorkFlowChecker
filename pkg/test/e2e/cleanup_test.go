@@ -48,11 +48,11 @@ func TestCleanupScenarios(t *testing.T) {
 		{
 			name: "CleanupWithLockedFiles",
 			testFunc: func(t *testing.T) {
-				env := setupTestEnv(t)
-				defer env.cleanup()
+				env := NewTestEnv(t)
+				defer env.Cleanup()
 
 				// Clone repository
-				repoPath := env.cloneTestRepo()
+				repoPath := env.CloneTestRepo()
 
 				// Create a file and keep it open
 				lockFile := filepath.Join(repoPath, "locked-file.txt")
@@ -97,11 +97,11 @@ func TestCleanupScenarios(t *testing.T) {
 		{
 			name: "CleanupDuringGitOperations",
 			testFunc: func(t *testing.T) {
-				env := setupTestEnv(t)
-				defer env.cleanup()
+				env := NewTestEnv(t)
+				defer env.Cleanup()
 
 				// Clone repository
-				repoPath := env.cloneTestRepo()
+				repoPath := env.CloneTestRepo()
 
 				// Start multiple git operations
 				var wg sync.WaitGroup
@@ -110,7 +110,7 @@ func TestCleanupScenarios(t *testing.T) {
 					go func(i int) {
 						defer wg.Done()
 						branchName := fmt.Sprintf("test-branch-%d", i)
-						cmd := env.createCommand("git", "checkout", "-b", branchName)
+						cmd := env.CreateCommand("git", "checkout", "-b", branchName)
 						cmd.Dir = repoPath
 						_ = cmd.Run() // Ignore errors as cleanup might occur during execution
 					}(i)
@@ -136,11 +136,11 @@ func TestCleanupScenarios(t *testing.T) {
 		{
 			name: "CleanupWithPartialChanges",
 			testFunc: func(t *testing.T) {
-				env := setupTestEnv(t)
-				defer env.cleanup()
+				env := NewTestEnv(t)
+				defer env.Cleanup()
 
 				// Clone repository
-				repoPath := env.cloneTestRepo()
+				repoPath := env.CloneTestRepo()
 
 				// Create multiple files and directories
 				testFiles := []string{
@@ -154,7 +154,7 @@ func TestCleanupScenarios(t *testing.T) {
 					if err := os.MkdirAll(dir, 0755); err != nil {
 						t.Fatalf("Failed to create directory %s: %v", dir, err)
 					}
-					if err := os.WriteFile(file, []byte("test content"), 0644); err != nil {
+					if err := os.WriteFile(file, []byte("test content"), 0600); err != nil {
 						t.Fatalf("Failed to create file %s: %v", file, err)
 					}
 				}
@@ -184,8 +184,8 @@ func TestCleanupScenarios(t *testing.T) {
 		{
 			name: "CleanupAfterPanic",
 			testFunc: func(t *testing.T) {
-				env := setupTestEnv(t)
-				repoPath := env.cloneTestRepo()
+				env := NewTestEnv(t)
+				repoPath := env.CloneTestRepo()
 
 				// Simulate a panic during operations
 				func() {
@@ -197,7 +197,7 @@ func TestCleanupScenarios(t *testing.T) {
 
 					// Create some files
 					testFile := filepath.Join(repoPath, "panic-test.txt")
-					if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
+					if err := os.WriteFile(testFile, []byte("test content"), 0600); err != nil {
 						t.Fatalf("Failed to create test file: %v", err)
 					}
 
@@ -219,11 +219,11 @@ func TestCleanupScenarios(t *testing.T) {
 		{
 			name: "CleanupWithNestedRepositories",
 			testFunc: func(t *testing.T) {
-				env := setupTestEnv(t)
-				defer env.cleanup()
+				env := NewTestEnv(t)
+				defer env.Cleanup()
 
 				// Clone main repository
-				mainRepoPath := env.cloneTestRepo()
+				mainRepoPath := env.CloneTestRepo()
 
 				// Create a nested repository structure
 				subRepoPath := filepath.Join(mainRepoPath, "subrepo")
@@ -232,7 +232,7 @@ func TestCleanupScenarios(t *testing.T) {
 				}
 
 				// Initialize sub-repository
-				cmd := env.createCommand("git", "init")
+				cmd := env.CreateCommand("git", "init")
 				cmd.Dir = subRepoPath
 				if err := cmd.Run(); err != nil {
 					t.Fatalf("Failed to initialize sub-repository: %v", err)
@@ -240,7 +240,7 @@ func TestCleanupScenarios(t *testing.T) {
 
 				// Create some files in sub-repository
 				subRepoFile := filepath.Join(subRepoPath, "test.txt")
-				if err := os.WriteFile(subRepoFile, []byte("test content"), 0644); err != nil {
+				if err := os.WriteFile(subRepoFile, []byte("test content"), 0600); err != nil {
 					t.Fatalf("Failed to create file in sub-repository: %v", err)
 				}
 

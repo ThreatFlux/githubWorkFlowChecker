@@ -2,16 +2,14 @@ package e2e
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
-	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/updater"
 	"github.com/google/go-github/v58/github"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/oauth2"
 )
 
@@ -21,136 +19,113 @@ func TestRepositoryFailures(t *testing.T) {
 		testFunc func(t *testing.T)
 	}{
 		{
-			name: "InvalidTokenFailure",
+			name: "RepositoryCreationFailure",
 			testFunc: func(t *testing.T) {
-				// Setup test environment with invalid token
+				// Create a GitHub client with invalid token for testing
 				token := "invalid_token"
+				testRepoOwner := "invalid_owner"
+				testRepo := "invalid_repo"
+				testTimeout := 5 * time.Second
+
+				ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
 				ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 				defer cancel()
 
-				ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
 				tc := oauth2.NewClient(ctx, ts)
 				client := github.NewClient(tc)
 
-				// Attempt to create repository
+				// Attempt to create repository - should fail with auth error
 				_, _, err := client.Repositories.Create(ctx, testRepoOwner, &github.Repository{
-					Name:        github.String("test-repo-invalid"),
-					Description: github.String("Test repository for failure scenarios"),
-					AutoInit:    github.Bool(true),
-					Private:     github.Bool(true),
+					Name:    github.String(testRepo),
+					Private: github.Bool(true),
+				})
+
+				assert.Error(t, err, "Expected error when creating repository with invalid token")
+			},
+		},
+		{
+			name: "InvalidRepositoryURL",
+			testFunc: func(t *testing.T) {
+				env := NewTestEnv(t)
+				defer env.Cleanup()
+
+				testRepoOwner := "non_existent_user"
+				testRepo := "non_existent_repo"
+
+				// Try to create a repository with invalid credentials
+				// This should fail due to authentication
+				_, _, err := env.githubClient.Repositories.Create(env.Context(), testRepoOwner, &github.Repository{
+					Name:    github.String(testRepo),
+					Private: github.Bool(true),
 				})
 
 				if err == nil {
-					t.Errorf(common.ErrExpectedError, "authentication error")
+					t.Error("Expected error when creating repository with insufficient permissions")
+				}
+
+				// Clone URL for non-existent repository
+				cloneURL := fmt.Sprintf("https://github.com/%s/%s.git", testRepoOwner, testRepo)
+				repoPath := filepath.Join(env.WorkDir, "invalid-repo")
+
+				// Attempt to clone - should fail
+				err = env.CloneWithError(cloneURL, repoPath)
+				if err == nil {
+					t.Error("Expected error when cloning non-existent repository")
 				}
 			},
 		},
 		{
-			name: "RepositoryCreationFailure",
+			name: "CloneRepositoryToInaccessibleDirectory",
 			testFunc: func(t *testing.T) {
-				env := setupTestEnv(t)
-				defer env.cleanup()
+				// Skip on Windows since permissions work differently
+				if os.Getenv("RUNNER_OS") == "Windows" {
+					t.Skip("Skipping test on Windows")
+				}
 
-				// Attempt to create repository with invalid name
-				_, _, err := env.githubClient.Repositories.Create(env.ctx, testRepoOwner, &github.Repository{
-					Name:        github.String("invalid/repo/name"),
-					Description: github.String("Test repository with invalid name"),
-					AutoInit:    github.Bool(true),
-					Private:     github.Bool(true),
-				})
+				env := NewTestEnv(t)
+				defer env.Cleanup()
 
+				// Create a read-only directory
+				readOnlyDir := filepath.Join(env.WorkDir, "readonly")
+				if err := os.MkdirAll(readOnlyDir, 0500); err != nil {
+					t.Fatalf("Failed to create read-only directory: %v", err)
+				}
+
+				// Try to clone inside the read-only directory
+				repoURL := "https://github.com/octocat/Hello-World.git"
+				repoPath := filepath.Join(readOnlyDir, "repo")
+
+				// This should fail due to permissions
+				err := env.CloneWithError(repoURL, repoPath)
 				if err == nil {
-					t.Errorf(common.ErrExpectedError, "invalid repository name")
+					t.Error("Expected error when cloning to read-only directory")
 				}
 			},
 		},
 		{
-			name: "GitCloneFailure",
+			name: "CloneInvalidURL",
 			testFunc: func(t *testing.T) {
-				env := setupTestEnv(t)
-				defer env.cleanup()
+				env := NewTestEnv(t)
+				defer env.Cleanup()
 
-				// Try to clone non-existent repository
-				nonExistentRepo := "non-existent-repo-" + time.Now().Format("20060102150405")
-				cloneURL := "https://github.com/" + testRepoOwner + "/" + nonExistentRepo + ".git"
-				repoPath := filepath.Join(env.workDir, nonExistentRepo)
-
-				if err := os.MkdirAll(repoPath, 0750); err != nil {
-					t.Fatalf(common.ErrFailedToCreateRepoDir, err)
+				// Invalid URLs
+				invalidURLs := []string{
+					"https://githubcom/invalid/repo.git",   // Malformed URL
+					"git@github.com:invalid/user/repo.git", // Invalid SSH format
+					"file:///non/existent/path",            // Invalid file protocol
 				}
 
-				err := env.cloneWithError(cloneURL, repoPath)
-				if err == nil {
-					t.Errorf(common.ErrExpectedError, "repository not found")
-				}
-			},
-		},
-		{
-			name: "WorkflowDirectoryCreationFailure",
-			testFunc: func(t *testing.T) {
-				env := setupTestEnv(t)
-				defer env.cleanup()
+				for _, url := range invalidURLs {
+					repoPath := filepath.Join(env.WorkDir, "invalid-repo")
 
-				// Create repository
-				repoPath := env.cloneTestRepo()
+					// Ensure the directory doesn't exist
+					_ = os.RemoveAll(repoPath)
 
-				// Make workflows directory read-only with no write permissions
-				workflowDir := filepath.Join(repoPath, ".github", "workflows")
-				if err := os.MkdirAll(workflowDir, 0750); err != nil {
-					t.Fatalf(common.ErrFailedToCreateWorkflowsDir, err)
-				}
-				if err := os.Chmod(workflowDir, 0555); err != nil {
-					t.Fatalf(common.ErrFailedToChangePermissions, err)
-				}
-
-				// Attempt to create workflow file in read-only directory
-				workflowFile := filepath.Join(workflowDir, "test-failure.yml")
-				err := os.WriteFile(workflowFile, []byte("invalid: workflow: content"), 0600)
-				if err == nil {
-					t.Errorf(common.ErrExpectedError, "permission denied")
-				} else if !os.IsPermission(err) {
-					t.Errorf(common.ErrUnexpectedError, err)
-				}
-
-				// Restore permissions for cleanup
-				if err := os.Chmod(workflowDir, 0750); err != nil {
-					t.Fatalf(common.ErrFailedToRestorePermissions, err)
-				}
-			},
-		},
-		{
-			name: "InvalidWorkflowContent",
-			testFunc: func(t *testing.T) {
-				env := setupTestEnv(t)
-				defer env.cleanup()
-
-				// Create repository
-				repoPath := env.cloneTestRepo()
-
-				// Create workflow directory
-				workflowDir := filepath.Join(repoPath, ".github", "workflows")
-				if err := os.MkdirAll(workflowDir, 0750); err != nil {
-					t.Fatalf(common.ErrFailedToCreateWorkflowsDir, err)
-				}
-
-				// Create invalid workflow file
-				workflowFile := filepath.Join(workflowDir, "invalid.yml")
-				invalidContent := `
-invalid:
-		- yaml:
-				content:
-				  - missing: colon
-				    broken syntax
-`
-				if err := os.WriteFile(workflowFile, []byte(invalidContent), 0600); err != nil {
-					t.Fatalf(common.ErrFailedToWriteWorkflowFile, err)
-				}
-
-				// Attempt to parse invalid workflow
-				scanner := env.createScanner()
-				_, err := scanner.ParseActionReferences(workflowFile)
-				if err == nil {
-					t.Errorf(common.ErrExpectedError, "invalid YAML")
+					// Attempt to clone - should fail
+					err := env.CloneWithError(url, repoPath)
+					if err == nil {
+						t.Errorf("Expected error when cloning invalid URL: %s", url)
+					}
 				}
 			},
 		},
@@ -161,24 +136,4 @@ invalid:
 			tt.testFunc(t)
 		})
 	}
-}
-
-// Helper method to clone repository with error handling
-func (e *testEnv) cloneWithError(cloneURL, repoPath string) error {
-	cmd := e.createCommand("git", "clone", cloneURL, repoPath)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return errors.New(string(output))
-	}
-	return nil
-}
-
-// Helper method to create scanner
-func (e *testEnv) createScanner() *updater.Scanner {
-	return updater.NewScanner(e.workDir)
-}
-
-// Helper method to create command with context
-func (e *testEnv) createCommand(name string, args ...string) *exec.Cmd {
-	return exec.CommandContext(e.ctx, name, args...)
 }

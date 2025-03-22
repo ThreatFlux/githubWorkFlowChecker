@@ -122,8 +122,8 @@ func TestRateLimitHandler(t *testing.T) {
 	// Test GetRateLimitInfo with no previous response
 	handler.lastResponse = nil
 	info := handler.GetRateLimitInfo()
-	if info != "No rate limit information available" {
-		t.Errorf("Expected GetRateLimitInfo to return 'No rate limit information available', got %s", info)
+	if info != "no rate limit information available" {
+		t.Errorf("Expected GetRateLimitInfo to return 'no rate limit information available', got %s", info)
 	}
 
 	// Test GetRateLimitInfo with response

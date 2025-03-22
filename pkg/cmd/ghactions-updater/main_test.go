@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"log"
 	"os"
 	"path/filepath"
@@ -593,6 +594,11 @@ jobs:
 	}
 }
 
+// TestMain tests the main function
+// It sets up a temporary directory with a test workflow file and runs the main function
+// with mocked version checker and PR creator
+// It tests various scenarios including successful run, missing required flags, and errors
+// in version checker and PR creator
 func TestMain(t *testing.T) {
 	// Create a temporary directory for test files
 	tempDir, err := os.MkdirTemp("", "workflow-test")
@@ -746,8 +752,16 @@ jobs:
 			// Set up environment
 			os.Args = tt.args
 			for k, v := range tt.envVars {
-				os.Setenv(k, v)
-				defer os.Unsetenv(k)
+				err := os.Setenv(k, v)
+				if err != nil {
+					return
+				}
+				defer func(key string) {
+					err := os.Unsetenv(key)
+					if err != nil {
+						require.NoError(t, err)
+					}
+				}(k)
 			}
 
 			// Set up mocks
