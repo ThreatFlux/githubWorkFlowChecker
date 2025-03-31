@@ -66,7 +66,7 @@ ENV APP_USER=${USER} \
 RUN apk add --no-cache \
     bash=5.2.37-r0 \
     ca-certificates=20241121-r1 \
-    tzdata=2025a-r0 \
+    tzdata=2025b-r0 \
     && addgroup -g ${UID} ${USER} \
     && adduser -D -u ${UID} -G ${USER} ${USER} \
     # Create directories with appropriate permissions
