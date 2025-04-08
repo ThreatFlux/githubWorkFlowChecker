@@ -20,9 +20,9 @@ WORKDIR /app
 # Install required packages with versions pinned
 # Package names sorted alphanumerically
 RUN apk add --no-cache --virtual .build-deps \
-    ca-certificates=20241121-r1 \
-    cosign=2.4.1-r3 \
-    git=2.47.2-r0 \
+    ca-certificates \
+    cosign \
+    git \
     && addgroup -g ${UID} ${USER} \
     && adduser -D -u ${UID} -G ${USER} ${USER} \
     && mkdir -p /go/pkg/mod /go/src \
@@ -44,7 +44,7 @@ RUN cd pkg/cmd/ghactions-updater/ && \
 
 # Generate SBOM for the build stage
 FROM alpine:3.21 AS sbom-generator
-RUN apk add --no-cache syft=1.19.0-r3
+RUN apk add --no-cache syft
 COPY --from=builder /app /app
 RUN syft /app -o spdx-json=/sbom.json
 
@@ -64,9 +64,9 @@ ENV APP_USER=${USER} \
 # Install runtime dependencies and setup user with a single RUN command to reduce layers
 # Package names sorted alphanumerically for better maintainability
 RUN apk add --no-cache \
-    bash=5.2.37-r0 \
-    ca-certificates=20241121-r1 \
-    tzdata=2025b-r0 \
+    bash \
+    ca-certificates \
+    tzdata \
     && addgroup -g ${UID} ${USER} \
     && adduser -D -u ${UID} -G ${USER} ${USER} \
     # Create directories with appropriate permissions
