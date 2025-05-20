@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
@@ -128,16 +129,68 @@ func IsNewer(v1, v2 string) bool {
 	parts1 := strings.Split(v1, ".")
 	parts2 := strings.Split(v2, ".")
 
-	// Compare each part
-	for i := 0; i < len(parts1) && i < len(parts2); i++ {
-		if parts1[i] > parts2[i] {
+	// Determine the max length to iterate over
+	maxLen := len(parts1)
+	if len(parts2) > maxLen {
+		maxLen = len(parts2)
+	}
+
+	// Compare each part numerically when possible
+	for i := 0; i < maxLen; i++ {
+		p1 := ""
+		p2 := ""
+		if i < len(parts1) {
+			p1 = parts1[i]
+		}
+		if i < len(parts2) {
+			p2 = parts2[i]
+		}
+
+		n1 := numericPrefix(p1)
+		n2 := numericPrefix(p2)
+
+		if n1 > n2 {
 			return true
 		}
-		if parts1[i] < parts2[i] {
+		if n1 < n2 {
+			return false
+		}
+
+		lenP1 := lenNumericPrefix(p1)
+		lenP2 := lenNumericPrefix(p2)
+		s1 := p1[lenP1:]
+		s2 := p2[lenP2:]
+		if s1 > s2 {
+			return true
+		}
+		if s1 < s2 {
 			return false
 		}
 	}
 
-	// If all parts are equal, longer version is newer
-	return len(parts1) > len(parts2)
+	return false
+}
+
+// numericPrefix extracts the leading numeric portion of a version part.
+func numericPrefix(part string) int {
+	end := lenNumericPrefix(part)
+	if end == 0 {
+		return 0
+	}
+	n, err := strconv.Atoi(part[:end])
+	if err != nil {
+		fmt.Printf("Warning: failed to parse numeric prefix '%s': %v\n", part[:end], err)
+		return 0
+	}
+	return n
+}
+
+// lenNumericPrefix returns the length of the leading numeric portion of a string.
+func lenNumericPrefix(part string) int {
+	for i, r := range part {
+		if r < '0' || r > '9' {
+			return i
+		}
+	}
+	return len(part)
 }
