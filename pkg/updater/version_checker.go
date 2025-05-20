@@ -156,8 +156,10 @@ func IsNewer(v1, v2 string) bool {
 			return false
 		}
 
-		s1 := p1[lenNumericPrefix(p1):]
-		s2 := p2[lenNumericPrefix(p2):]
+		lenP1 := lenNumericPrefix(p1)
+		lenP2 := lenNumericPrefix(p2)
+		s1 := p1[lenP1:]
+		s2 := p2[lenP2:]
 		if s1 > s2 {
 			return true
 		}
