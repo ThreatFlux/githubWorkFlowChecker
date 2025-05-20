@@ -175,7 +175,11 @@ func numericPrefix(part string) int {
 	if end == 0 {
 		return 0
 	}
-	n, _ := strconv.Atoi(part[:end])
+	n, err := strconv.Atoi(part[:end])
+	if err != nil {
+		fmt.Printf("Warning: failed to parse numeric prefix '%s': %v\n", part[:end], err)
+		return 0
+	}
 	return n
 }
 
