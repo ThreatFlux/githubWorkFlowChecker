@@ -1,6 +1,7 @@
 package updater
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -331,4 +332,155 @@ type VersionTestCase struct {
 	WantHash      string
 	WantAvailable bool
 	WantError     bool
+}
+
+// TestCaseRunner provides utilities for running version checker test cases
+type TestCaseRunner struct {
+	t *testing.T
+}
+
+// NewTestCaseRunner creates a new test case runner
+func NewTestCaseRunner(t *testing.T) *TestCaseRunner {
+	return &TestCaseRunner{t: t}
+}
+
+// RunGetLatestVersionTest runs a GetLatestVersion test case
+func (r *TestCaseRunner) RunGetLatestVersionTest(tc VersionTestCase) {
+	r.t.Run(tc.Name, func(t *testing.T) {
+		server, checker := SetupVersionTestServer(t, tc.ServerType)
+		defer server.Close()
+
+		gotVersion, gotHash, err := checker.GetLatestVersion(context.Background(), tc.Action)
+		r.validateError(t, err, tc.WantError)
+
+		if !tc.WantError {
+			r.validateVersion(t, gotVersion, tc.WantVersion)
+			r.validateHash(t, gotHash, tc.WantHash)
+		}
+	})
+}
+
+// RunIsUpdateAvailableTest runs an IsUpdateAvailable test case
+func (r *TestCaseRunner) RunIsUpdateAvailableTest(tc VersionTestCase) {
+	r.t.Run(tc.Name, func(t *testing.T) {
+		server, checker := SetupVersionTestServer(t, tc.ServerType)
+		defer server.Close()
+
+		gotAvailable, gotVersion, gotHash, err := checker.IsUpdateAvailable(context.Background(), tc.Action)
+		r.validateError(t, err, tc.WantError)
+
+		if !tc.WantError {
+			r.validateAvailable(t, gotAvailable, tc.WantAvailable)
+			r.validateVersion(t, gotVersion, tc.WantVersion)
+			r.validateHash(t, gotHash, tc.WantHash)
+		}
+	})
+}
+
+// RunGetCommitHashTest runs a GetCommitHash test case with version parameter
+func (r *TestCaseRunner) RunGetCommitHashTest(name string, action ActionReference, version string, serverType VersionTestServerType, wantHash string, wantErr bool) {
+	r.t.Run(name, func(t *testing.T) {
+		server, checker := SetupVersionTestServer(t, serverType)
+		defer server.Close()
+
+		gotHash, err := checker.GetCommitHash(context.Background(), action, version)
+		r.validateError(t, err, wantErr)
+
+		if !wantErr {
+			r.validateHash(t, gotHash, wantHash)
+		}
+	})
+}
+
+// Helper validation methods
+func (r *TestCaseRunner) validateError(t *testing.T, err error, wantErr bool) {
+	if (err != nil) != wantErr {
+		t.Errorf("error = %v, wantErr %v", err, wantErr)
+	}
+}
+
+func (r *TestCaseRunner) validateVersion(t *testing.T, got, want string) {
+	if got != want {
+		t.Errorf("version = %v, want %v", got, want)
+	}
+}
+
+func (r *TestCaseRunner) validateHash(t *testing.T, got, want string) {
+	if got != want {
+		t.Errorf("hash = %v, want %v", got, want)
+	}
+}
+
+func (r *TestCaseRunner) validateAvailable(t *testing.T, got, want bool) {
+	if got != want {
+		t.Errorf("available = %v, want %v", got, want)
+	}
+}
+
+// Test data factories
+func CreateActionReference(owner, name, version, commitHash string) ActionReference {
+	return ActionReference{
+		Owner:      owner,
+		Name:       name,
+		Version:    version,
+		CommitHash: commitHash,
+	}
+}
+
+func CreateSimpleAction(version string) ActionReference {
+	return CreateActionReference("test-owner", "test-repo", version, "")
+}
+
+func CreateActionWithHash(version, commitHash string) ActionReference {
+	return CreateActionReference("test-owner", "test-repo", version, commitHash)
+}
+
+// SimpleTestCase represents a simple test case with name and expectation
+type SimpleTestCase struct {
+	Name    string
+	Input   interface{}
+	Want    interface{}
+	WantErr bool
+}
+
+// AuthTestCase represents a test case for authentication tests
+type AuthTestCase struct {
+	Name     string
+	Token    string
+	WantAuth bool
+}
+
+// Common test data generators
+func GetHexStringTestCases() []SimpleTestCase {
+	return []SimpleTestCase{
+		{"valid SHA", "a81bbbf8298c0fa03ea29cdc473d45769f953675", true, false},
+		{"invalid characters", "not-a-hex-string", false, false},
+		{"mixed case valid", "A81BBbf8298c0fa03ea29cdc473d45769f953675", true, false},
+		{"empty string", "", true, false},
+		{"short valid hex", "abc123", true, false},
+		{"invalid character in middle", "a81bbbf8298c0fa03ea29cdc473g45769f953675", false, false},
+		{"spaces in string", "a81b bbf8 298c", false, false},
+	}
+}
+
+func GetVersionComparisonTestCases() []SimpleTestCase {
+	return []SimpleTestCase{
+		{"newer major version", []string{"v2.0.0", "v1.0.0"}, true, false},
+		{"older major version", []string{"v1.0.0", "v2.0.0"}, false, false},
+		{"newer minor version", []string{"v1.1.0", "v1.0.0"}, true, false},
+		{"newer patch version", []string{"v1.0.1", "v1.0.0"}, true, false},
+		{"same version", []string{"v1.0.0", "v1.0.0"}, false, false},
+		{"without v prefix", []string{"2.0.0", "1.0.0"}, true, false},
+		{"mixed v prefix", []string{"v2.0.0", "1.0.0"}, true, false},
+		{"longer version", []string{"v1.0.0.1", "v1.0.0"}, true, false},
+		{"shorter version", []string{"v1.0", "v1.0.0"}, false, false},
+		{"alpha versions", []string{"v1.0.0-alpha.2", "v1.0.0-alpha.1"}, true, false},
+	}
+}
+
+func GetAuthTestCases() []AuthTestCase {
+	return []AuthTestCase{
+		{"with token", "test-token", true},
+		{"without token", "", false},
+	}
 }
