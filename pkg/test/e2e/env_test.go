@@ -149,10 +149,10 @@ func (e *testEnv) cloneTestRepo() string {
 		if resp != nil && resp.StatusCode == 404 {
 			// Repository doesn't exist, create it in the organization
 			repo, _, err = e.githubClient.Repositories.Create(e.ctx, testRepoOwner, &github.Repository{
-				Name:        github.String(testRepo),
-				Description: github.String("Test repository for GitHub Actions workflow updater"),
-				AutoInit:    github.Bool(true),
-				Private:     github.Bool(true),
+				Name:        github.Ptr(testRepo),
+				Description: github.Ptr("Test repository for GitHub Actions workflow updater"),
+				AutoInit:    github.Ptr(true),
+				Private:     github.Ptr(true),
 			})
 			if err != nil {
 				e.t.Fatalf("Failed to create test repository: %v", err)

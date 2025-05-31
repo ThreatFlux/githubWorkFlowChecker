@@ -79,7 +79,7 @@ func (c *DefaultPRCreator) CreatePR(ctx context.Context, updates []*Update) erro
 		Title: &title,
 		Body:  &body,
 		Head:  &branchName,
-		Base:  github.String("main"),
+		Base:  github.Ptr("main"),
 	})
 
 	if err != nil {
@@ -115,7 +115,7 @@ func (c *DefaultPRCreator) createBranch(ctx context.Context, branchName string) 
 
 	// Create new branch
 	newRef := &github.Reference{
-		Ref:    github.String("refs/heads/" + branchName),
+		Ref:    github.Ptr("refs/heads/" + branchName),
 		Object: ref.Object,
 	}
 
@@ -161,7 +161,7 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 			// If file doesn't exist in the repository yet, create empty content
 			if strings.Contains(err.Error(), "404") {
 				content = &github.RepositoryContent{
-					Content: github.String(""),
+					Content: github.Ptr(""),
 				}
 			} else {
 				return fmt.Errorf(common.ErrGettingFileContents, err)
@@ -239,8 +239,8 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 
 		// Create blob for updated content
 		blob, _, err := c.client.Git.CreateBlob(ctx, c.owner, c.repo, &github.Blob{
-			Content:  github.String(fileContent),
-			Encoding: github.String("utf-8"),
+			Content:  github.Ptr(fileContent),
+			Encoding: github.Ptr("utf-8"),
 		})
 		if err != nil {
 			return fmt.Errorf(common.ErrCreatingBlob, err)
@@ -250,9 +250,9 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 		relPath = strings.TrimPrefix(relPath, "/")
 
 		entries = append(entries, &github.TreeEntry{
-			Path: github.String(relPath),
-			Mode: github.String("100644"),
-			Type: github.String("blob"),
+			Path: github.Ptr(relPath),
+			Mode: github.Ptr("100644"),
+			Type: github.Ptr("blob"),
 			SHA:  blob.SHA,
 		})
 	}
@@ -271,7 +271,7 @@ func (c *DefaultPRCreator) createCommit(ctx context.Context, branch string, upda
 
 	// Create commit
 	commit, _, err := c.client.Git.CreateCommit(ctx, c.owner, c.repo, &github.Commit{
-		Message: github.String(c.generateCommitMessage(updates)),
+		Message: github.Ptr(c.generateCommitMessage(updates)),
 		Tree:    tree,
 		Parents: []*github.Commit{{SHA: ref.Object.SHA}},
 	}, &github.CreateCommitOptions{})

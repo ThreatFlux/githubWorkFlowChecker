@@ -34,10 +34,10 @@ func TestRepositoryFailures(t *testing.T) {
 
 				// Attempt to create repository
 				_, _, err := client.Repositories.Create(ctx, testRepoOwner, &github.Repository{
-					Name:        github.String("test-repo-invalid"),
-					Description: github.String("Test repository for failure scenarios"),
-					AutoInit:    github.Bool(true),
-					Private:     github.Bool(true),
+					Name:        github.Ptr("test-repo-invalid"),
+					Description: github.Ptr("Test repository for failure scenarios"),
+					AutoInit:    github.Ptr(true),
+					Private:     github.Ptr(true),
 				})
 
 				if err == nil {
@@ -53,10 +53,10 @@ func TestRepositoryFailures(t *testing.T) {
 
 				// Attempt to create repository with invalid name
 				_, _, err := env.githubClient.Repositories.Create(env.ctx, testRepoOwner, &github.Repository{
-					Name:        github.String("invalid/repo/name"),
-					Description: github.String("Test repository with invalid name"),
-					AutoInit:    github.Bool(true),
-					Private:     github.Bool(true),
+					Name:        github.Ptr("invalid/repo/name"),
+					Description: github.Ptr("Test repository with invalid name"),
+					AutoInit:    github.Ptr(true),
+					Private:     github.Ptr(true),
 				})
 
 				if err == nil {

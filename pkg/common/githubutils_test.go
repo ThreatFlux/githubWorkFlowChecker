@@ -295,9 +295,9 @@ func TestGitHubHelperFunctions(t *testing.T) {
 
 	// Test CreateRef
 	ref := &github.Reference{
-		Ref: github.String("refs/heads/test-branch"),
+		Ref: github.Ptr("refs/heads/test-branch"),
 		Object: &github.GitObject{
-			SHA: github.String("abcdef1234567890"),
+			SHA: github.Ptr("abcdef1234567890"),
 		},
 	}
 	err = CreateRef(ctx, client, "owner", "repo", ref)
