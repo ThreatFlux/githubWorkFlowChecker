@@ -70,6 +70,12 @@ var (
 	prCreatorFactory = func(token, owner, repo string) updater.PRCreator {
 		return updater.NewPRCreator(token, owner, repo)
 	}
+	tokenValidatorFactory = func(token string) func(context.Context) error {
+		return func(ctx context.Context) error {
+			client := common.NewGitHubClientWithToken(token)
+			return common.ValidateTokenScopes(ctx, client)
+		}
+	}
 	// For testing
 	absFunc = filepath.Abs
 )
@@ -77,11 +83,10 @@ var (
 func run() error {
 	// Validate token scopes if token is provided and we're not in dry-run or stage mode
 	if *token != "" && !*dryRun && !*stage {
-		// Create a GitHub client to validate token scopes
-		client := common.NewGitHubClientWithToken(*token)
 		ctx := context.Background()
+		validator := tokenValidatorFactory(*token)
 
-		if err := common.ValidateTokenScopes(ctx, client); err != nil {
+		if err := validator(ctx); err != nil {
 			return fmt.Errorf("token validation failed: %w", err)
 		}
 

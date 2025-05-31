@@ -18,9 +18,15 @@ This is a Go-based security tool called **GitHub Actions Workflow Checker** that
 - `make all` - Run all checks and build
 
 ### Testing
-- `make test` - Run all tests (requires GITHUB_TOKEN)
+- `make check-github-token` - Validate GitHub token before running tests
+- `make test` - Run all tests (requires GITHUB_TOKEN, automatically validates token)
 - `go test ./pkg/...` - Run tests directly
 - `go test -run TestSpecificFunction ./pkg/updater/` - Run specific test
+
+**Note**: Tests require a valid GitHub personal access token with appropriate scopes:
+- For public repositories: `public_repo` scope
+- For private repositories: `repo` scope
+- Generate tokens at: https://github.com/settings/tokens
 
 ### Docker Development
 - `make docker-build` - Build Docker image
@@ -91,6 +97,7 @@ The codebase uses comprehensive testing with:
 - GITHUB_TOKEN environment variable required for tests that interact with GitHub API
 - Tests use table-driven test patterns extensively
 - Mock servers for testing GitHub API interactions
+- Token validation is mocked in tests using factory pattern to avoid real API calls during testing
 
 ### Security Focus
 

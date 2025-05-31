@@ -5,6 +5,49 @@ on:
     types: [opened, edited, synchronize]
 
 jobs:
+  assign-copilot:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+    
+    steps:
+      - name: Auto-assign Copilot to PR
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            
+            // Only assign on newly opened PRs to avoid re-triggering on edits
+            if (context.payload.action === 'opened') {
+              try {
+                // Request Copilot review for the PR
+                await github.rest.pulls.requestReviewers({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pr.number,
+                  reviewers: ['github-copilot[bot]']
+                });
+                
+                console.log('✅ Successfully assigned Copilot to review PR');
+              } catch (error) {
+                console.error(`Failed to assign Copilot: ${error.message}`);
+                
+                // If direct assignment fails, try using the Copilot API
+                try {
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: pr.number,
+                    body: '@github-copilot review'
+                  });
+                  console.log('✅ Posted Copilot review request as comment');
+                } catch (commentError) {
+                  console.error(`Failed to request Copilot review via comment: ${commentError.message}`);
+                }
+              }
+            }
+
   link-issues:
     runs-on: ubuntu-latest
     permissions:
@@ -13,7 +56,7 @@ jobs:
     
     steps:
       - name: Link PR to Issues
-        uses: actions/github-script@v7
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
         with:
           script: |
             const pr = context.payload.pull_request;

@@ -37,7 +37,7 @@ DOCKER_TAG ?= $(VERSION)
 DOCKER_LATEST = $(DOCKER_IMAGE):latest
 DOCKER_DEV_IMAGE = $(DOCKER_REGISTRY)/go-dev
 
-.PHONY: all build test lint clean docker-build check-versions install-tools security help version-info coverage dupl-check docker-push docker-sign docker-verify install docker-run fmt docker-test docker-tests docker-dev-build docker-fmt docker-lint docker-security docker-coverage docker-dupl-check docker-all docker-shell
+.PHONY: all build test lint clean docker-build check-versions check-github-token install-tools security help version-info coverage dupl-check docker-push docker-sign docker-verify install docker-run fmt docker-test docker-tests docker-dev-build docker-fmt docker-lint docker-security docker-coverage docker-dupl-check docker-all docker-shell
 
 # Version check targets
 check-versions: ## Check all required tool versions
@@ -47,6 +47,22 @@ check-versions: ## Check all required tool versions
 	@echo "Checking Docker version..."
 @$(DOCKER) --version | grep -q "$(REQUIRED_DOCKER_VERSION)" || (echo "Warning: Recommended Docker version $(REQUIRED_DOCKER_VERSION) not found")
 	@echo "All version checks completed"
+
+check-github-token: ## Validate GitHub token
+	@echo "Validating GitHub token..."
+	@if [ -z "$$GITHUB_TOKEN" ]; then \
+		echo "Error: GITHUB_TOKEN environment variable is not set"; \
+		echo "Please set GITHUB_TOKEN with a valid GitHub personal access token"; \
+		echo "The token needs 'repo' scope for private repositories or 'public_repo' for public ones"; \
+		echo "Generate one at: https://github.com/settings/tokens"; \
+		exit 1; \
+	fi
+	@echo "Testing GitHub API access..."
+	@curl -s -f -H "Authorization: token $$GITHUB_TOKEN" https://api.github.com/user > /dev/null && \
+		echo "✓ GitHub token is valid and has API access" || \
+		(echo "✗ GitHub token is invalid or expired" && \
+		 echo "Please check your token at: https://github.com/settings/tokens" && \
+		 exit 1)
 
 # Install required tools
 install-tools: ## Install required Go tools
@@ -74,20 +90,16 @@ lint: install-tools ## Run golangci-lint for code analysis
 	@echo "Running linters..."
 	$(GOLANGCI_LINT) $(LINT_FLAGS) ./...
 
-test: ## Run unit tests with coverage
+test: check-github-token ## Run unit tests with coverage
 	@echo "Running tests..."
-	@if [ -z "$$GITHUB_TOKEN" ]; then \
-		echo "Error: GITHUB_TOKEN environment variable is required for tests"; \
-		exit 1; \
-	fi
+	@echo "Configuring Git to use SSH for GitHub operations..."
+	@git config url."git@github.com:".insteadOf "https://github.com/" 2>/dev/null || true
 	@$(GO) test $(TEST_FLAGS) ./pkg/...
 
-coverage: ## Generate test coverage report
+coverage: check-github-token ## Generate test coverage report
 	@echo "Generating coverage report..."
-	@if [ -z "$$GITHUB_TOKEN" ]; then \
-		echo "Error: GITHUB_TOKEN environment variable is required"; \
-		exit 1; \
-	fi
+	@echo "Configuring Git to use SSH for GitHub operations..."
+	@git config url."git@github.com:".insteadOf "https://github.com/" 2>/dev/null || true
 	@$(GO) test -coverprofile=$(COVERAGE_PROFILE) ./pkg/...
 	@$(GO) tool cover -html=$(COVERAGE_PROFILE) -o $(COVERAGE_HTML)
 	@$(GO) tool cover -func=$(COVERAGE_PROFILE)

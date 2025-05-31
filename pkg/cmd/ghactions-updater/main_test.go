@@ -478,9 +478,11 @@ jobs:
 			// Save and restore factories
 			oldVersionFactory := versionCheckerFactory
 			oldPRFactory := prCreatorFactory
+			oldTokenValidatorFactory := tokenValidatorFactory
 			defer func() {
 				versionCheckerFactory = oldVersionFactory
 				prCreatorFactory = oldPRFactory
+				tokenValidatorFactory = oldTokenValidatorFactory
 			}()
 
 			// Set up mock version checker
@@ -491,6 +493,13 @@ jobs:
 			// Set up mock PR creator
 			prCreatorFactory = func(token, owner, repo string) updater.PRCreator {
 				return tt.prCreator
+			}
+
+			// Set up mock token validator that always succeeds
+			tokenValidatorFactory = func(token string) func(context.Context) error {
+				return func(ctx context.Context) error {
+					return nil // Always pass validation in tests
+				}
 			}
 
 			// Run the function with mocks
@@ -563,9 +572,11 @@ jobs:
 	// Mock version checker and PR creator
 	oldVersionFactory := versionCheckerFactory
 	oldPRFactory := prCreatorFactory
+	oldTokenValidatorFactory := tokenValidatorFactory
 	defer func() {
 		versionCheckerFactory = oldVersionFactory
 		prCreatorFactory = oldPRFactory
+		tokenValidatorFactory = oldTokenValidatorFactory
 	}()
 
 	versionCheckerFactory = func(token string) updater.VersionChecker {
@@ -579,6 +590,13 @@ jobs:
 	prCreatorFactory = func(token, owner, repo string) updater.PRCreator {
 		return &mockPRCreator{
 			err: nil,
+		}
+	}
+
+	// Set up mock token validator that always succeeds
+	tokenValidatorFactory = func(token string) func(context.Context) error {
+		return func(ctx context.Context) error {
+			return nil // Always pass validation in tests
 		}
 	}
 
@@ -663,9 +681,11 @@ jobs:
 	// Save and restore factories
 	oldVersionFactory := versionCheckerFactory
 	oldPRFactory := prCreatorFactory
+	oldTokenValidatorFactory := tokenValidatorFactory
 	defer func() {
 		versionCheckerFactory = oldVersionFactory
 		prCreatorFactory = oldPRFactory
+		tokenValidatorFactory = oldTokenValidatorFactory
 	}()
 
 	tests := []struct {
@@ -756,6 +776,12 @@ jobs:
 			}
 			prCreatorFactory = func(token, owner, repo string) updater.PRCreator {
 				return tt.prCreator
+			}
+			// Set up mock token validator that always succeeds
+			tokenValidatorFactory = func(token string) func(context.Context) error {
+				return func(ctx context.Context) error {
+					return nil // Always pass validation in tests
+				}
 			}
 
 			// Parse flags
