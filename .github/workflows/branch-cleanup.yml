@@ -1,0 +1,186 @@
+name: Branch Cleanup
+
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    # Clean up stale branches weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    # Allow manual triggering
+
+jobs:
+  cleanup-merged-branches:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0  # Fetch all history for all branches
+
+      - name: Clean up merged branches
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            
+            // Get all remote branches
+            let remoteBranches;
+            try {
+              const output = execSync('git branch -r --merged origin/main', { encoding: 'utf8' });
+              remoteBranches = output.split('\n')
+                .map(branch => branch.trim())
+                .filter(branch => branch && !branch.includes('->'))
+                .map(branch => branch.replace('origin/', ''))
+                .filter(branch => !['main', 'master', 'develop', 'development'].includes(branch));
+            } catch (error) {
+              console.log('No merged branches found or error occurred:', error.message);
+              return;
+            }
+            
+            console.log('Found merged branches:', remoteBranches);
+            
+            // Delete merged branches that are safe to delete
+            const deletedBranches = [];
+            const protectedPrefixes = ['release/', 'hotfix/', 'dependabot/'];
+            
+            for (const branch of remoteBranches) {
+              // Skip protected branches
+              const isProtected = protectedPrefixes.some(prefix => branch.startsWith(prefix));
+              if (isProtected) {
+                console.log(`Skipping protected branch: ${branch}`);
+                continue;
+              }
+              
+              // Check if this branch has an associated closed PR
+              try {
+                const { data: pulls } = await github.rest.pulls.list({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  head: `${context.repo.owner}:${branch}`,
+                  state: 'closed'
+                });
+                
+                if (pulls.length > 0 && pulls[0].merged_at) {
+                  // Branch has a merged PR, safe to delete
+                  try {
+                    await github.rest.git.deleteRef({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      ref: `heads/${branch}`
+                    });
+                    deletedBranches.push(branch);
+                    console.log(`✅ Deleted merged branch: ${branch}`);
+                  } catch (deleteError) {
+                    console.error(`Failed to delete branch ${branch}:`, deleteError.message);
+                  }
+                } else {
+                  console.log(`Branch ${branch} merged but no associated merged PR found, skipping`);
+                }
+              } catch (error) {
+                console.error(`Error checking PR for branch ${branch}:`, error.message);
+              }
+            }
+            
+            if (deletedBranches.length > 0) {
+              console.log(`\n🧹 Cleanup complete! Deleted ${deletedBranches.length} merged branches:`);
+              deletedBranches.forEach(branch => console.log(`  - ${branch}`));
+            } else {
+              console.log('\n✨ No merged branches to clean up!');
+            }
+
+  cleanup-stale-branches:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Find and delete stale branches
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          script: |
+            const { execSync } = require('child_process');
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - 30); // 30 days ago
+            
+            // Get all remote branches with last commit date
+            let branches;
+            try {
+              const output = execSync('git for-each-ref --format="%(refname:short) %(committerdate:iso8601)" refs/remotes/origin', { encoding: 'utf8' });
+              branches = output.split('\n')
+                .map(line => line.trim())
+                .filter(line => line)
+                .map(line => {
+                  const [ref, date] = line.split(' ');
+                  return {
+                    name: ref.replace('origin/', ''),
+                    date: new Date(date)
+                  };
+                })
+                .filter(branch => !['main', 'master', 'develop', 'development'].includes(branch.name))
+                .filter(branch => branch.date < cutoffDate);
+            } catch (error) {
+              console.log('Error getting branch information:', error.message);
+              return;
+            }
+            
+            console.log(`Found ${branches.length} stale branches (older than 30 days)`);
+            
+            const deletedBranches = [];
+            const protectedPrefixes = ['release/', 'hotfix/', 'dependabot/'];
+            
+            for (const branch of branches) {
+              // Skip protected branches
+              const isProtected = protectedPrefixes.some(prefix => branch.name.startsWith(prefix));
+              if (isProtected) {
+                console.log(`Skipping protected branch: ${branch.name}`);
+                continue;
+              }
+              
+              // Check if branch has open PRs
+              try {
+                const { data: pulls } = await github.rest.pulls.list({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  head: `${context.repo.owner}:${branch.name}`,
+                  state: 'open'
+                });
+                
+                if (pulls.length === 0) {
+                  // No open PRs, safe to delete stale branch
+                  try {
+                    await github.rest.git.deleteRef({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      ref: `heads/${branch.name}`
+                    });
+                    deletedBranches.push(branch.name);
+                    console.log(`✅ Deleted stale branch: ${branch.name} (last commit: ${branch.date.toISOString()})`);
+                  } catch (deleteError) {
+                    console.error(`Failed to delete stale branch ${branch.name}:`, deleteError.message);
+                  }
+                } else {
+                  console.log(`Branch ${branch.name} is stale but has open PRs, skipping`);
+                }
+              } catch (error) {
+                console.error(`Error checking PRs for branch ${branch.name}:`, error.message);
+              }
+            }
+            
+            if (deletedBranches.length > 0) {
+              console.log(`\n🧹 Stale cleanup complete! Deleted ${deletedBranches.length} stale branches:`);
+              deletedBranches.forEach(branch => console.log(`  - ${branch}`));
+            } else {
+              console.log('\n✨ No stale branches to clean up!');
+            }
