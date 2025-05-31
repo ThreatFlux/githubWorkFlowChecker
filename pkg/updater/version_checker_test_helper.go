@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/google/go-github/v58/github"
+	"github.com/google/go-github/v72/github"
 )
 
 // VersionTestServerType defines types of version checker test servers

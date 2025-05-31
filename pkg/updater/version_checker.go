@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
-	"github.com/google/go-github/v58/github"
+	"github.com/google/go-github/v72/github"
 )
 
 // DefaultVersionChecker implements the VersionChecker interface using GitHub API

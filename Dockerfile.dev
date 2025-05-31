@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.4
 
 # Development image with all required tools for Go development
-FROM golang:1.24.1-alpine3.21
+FROM golang:1.24.2-alpine3.21
 
 # Build arguments
 ARG USER=goapp

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/google/go-github/v58/github"
+	"github.com/google/go-github/v72/github"
 )
 
 // MockServerBuilder helps build a mock HTTP server for testing GitHub API interactions

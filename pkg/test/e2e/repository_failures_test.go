@@ -11,7 +11,7 @@ import (
 
 	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/common"
 	"github.com/ThreatFlux/githubWorkFlowChecker/pkg/updater"
-	"github.com/google/go-github/v58/github"
+	"github.com/google/go-github/v72/github"
 	"golang.org/x/oauth2"
 )
 

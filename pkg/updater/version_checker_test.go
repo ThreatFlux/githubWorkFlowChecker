@@ -539,7 +539,6 @@ func TestDefaultVersionChecker_GetCommitHash(t *testing.T) {
 			action: ActionReference{
 				Owner: "test-owner",
 				Name:  "test-repo",
-
 			},
 			version:    "v6.0.0",
 			serverType: AnnotatedTagErrorServer,

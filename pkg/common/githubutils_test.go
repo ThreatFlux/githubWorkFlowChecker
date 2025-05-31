@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-github/v58/github"
+	"github.com/google/go-github/v72/github"
 )
 
 func TestNewGitHubClient(t *testing.T) {

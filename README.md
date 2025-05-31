@@ -113,7 +113,7 @@ ghactions-updater [options]
 
 ### Prerequisites
 
-- Go 1.24.0 or later
+- Go 1.24.2 or later
 - Make
 - Docker (optional)
 - Git

@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/google/go-github/v58/github"
+	"github.com/google/go-github/v72/github"
 )
 
 // TestFixture represents a reusable test fixture for GitHub API testing
