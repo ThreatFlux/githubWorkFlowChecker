@@ -110,7 +110,7 @@ const (
 	ErrInvalidEnterpriseURL = "invalid enterprise URL: %w"
 
 	// Token validation errors
-	ErrInvalidGitHubToken    = "invalid GitHub token: %w"
+	ErrInvalidGitHubToken    = "invalid GitHub token: %w" // #nosec G101 - This is an error message, not a credential
 	ErrFailedToValidateToken = "failed to validate token: %w"
 	ErrTokenMissingScope     = "token missing required scope: %s"
 	ErrFailedToCheckScopes   = "failed to check token scopes: %w"
