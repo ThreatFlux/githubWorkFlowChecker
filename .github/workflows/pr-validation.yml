@@ -1,0 +1,110 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      statuses: write
+    
+    steps:
+      - name: Validate PR Title
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const title = pr.title;
+            
+            // Conventional commit pattern
+            const conventionalCommitPattern = /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .+$/;
+            
+            if (!conventionalCommitPattern.test(title)) {
+              // Post a comment with guidance
+              const comment = `❌ **PR title doesn't follow conventional commits format**
+            
+            Please update your PR title to follow the pattern: \`type(scope)?: description\`
+            
+            **Valid types:**
+            - \`feat\`: New feature
+            - \`fix\`: Bug fix
+            - \`docs\`: Documentation changes
+            - \`style\`: Code style changes (formatting, etc)
+            - \`refactor\`: Code refactoring
+            - \`perf\`: Performance improvements
+            - \`test\`: Test additions or corrections
+            - \`build\`: Build system changes
+            - \`ci\`: CI/CD changes
+            - \`chore\`: Maintenance tasks
+            - \`revert\`: Revert a previous commit
+            
+            **Examples:**
+            - \`feat: add token validation\`
+            - \`fix(scanner): handle empty workflow files\`
+            - \`docs: update README with new options\`
+            
+            Current title: \`${title}\``;
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: comment
+              });
+              
+              // Set status check
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: pr.head.sha,
+                state: 'failure',
+                context: 'PR Title Validation',
+                description: 'PR title must follow conventional commits'
+              });
+              
+              core.setFailed('PR title does not follow conventional commits format');
+            } else {
+              // Set success status
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: pr.head.sha,
+                state: 'success',
+                context: 'PR Title Validation',
+                description: 'PR title follows conventional commits'
+              });
+              
+              console.log('✅ PR title is valid');
+            }
+            
+      - name: Check PR Description
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+            
+            // Check if PR has a meaningful description
+            if (body.trim().length < 50) {
+              const comment = `⚠️ **PR description is too short**
+            
+            Please provide a detailed description of your changes including:
+            - What changes were made
+            - Why these changes are necessary
+            - Any potential impacts or considerations
+            - Testing performed
+            
+            A good PR description helps reviewers understand your changes quickly.`;
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: comment
+              });
+              
+              console.log('Warning: PR description is too short');
+            }

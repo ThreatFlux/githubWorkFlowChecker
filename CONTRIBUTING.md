@@ -99,6 +99,34 @@ When submitting changes that affect action updates:
 5. Include test coverage for new functionality
 6. Update relevant documentation
 
+## Pull Request Automation
+
+This repository uses GitHub Actions to automate several aspects of the PR process:
+
+### Automatic Issue Closing
+When a PR is merged, any issues referenced with keywords like `Fixes #123`, `Closes #123`, or `Resolves #123` will be automatically closed with a comment.
+
+### PR Validation
+- **Title Format**: PR titles must follow [Conventional Commits](https://www.conventionalcommits.org/) format:
+  - Pattern: `type(scope)?: description`
+  - Examples: `feat: add token validation`, `fix(scanner): handle empty files`
+  - Valid types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+
+- **Description**: PRs should have a meaningful description (at least 50 characters) explaining:
+  - What changes were made
+  - Why these changes are necessary
+  - Any potential impacts
+  - Testing performed
+
+### Automatic Labeling
+PRs that reference issues will automatically inherit relevant labels (security, enhancement, bug, documentation) from those issues.
+
+### Linking Issues
+To link your PR to an issue:
+- Use keywords in the PR title or description: `Fixes #123`, `Closes #456`, `Resolves #789`
+- Simply reference with `#123` to link without auto-closing
+- Multiple issues can be referenced in one PR
+
 ## Community
 
 Discussions about the project take place on this repository's [Issues](../../issues) and [Pull Requests](../../pulls) sections. Anybody is welcome to join these conversations.
