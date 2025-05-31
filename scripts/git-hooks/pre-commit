@@ -1,0 +1,54 @@
+#!/bin/bash
+# Pre-commit hook for GitHub Workflow Checker
+# This hook runs code formatting and tests before each commit
+
+set -e
+
+echo "🔧 Running pre-commit hooks..."
+
+# Get the repository root directory
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cd "$REPO_ROOT"
+
+# Check if we have any Go files to commit
+if git diff --cached --name-only | grep -q '\.go$'; then
+    echo "📝 Formatting Go code..."
+    if ! make fmt; then
+        echo "❌ Code formatting failed"
+        exit 1
+    fi
+    
+    # Check if formatting changed any files
+    if ! git diff --exit-code; then
+        echo "❌ Code formatting made changes. Please add the formatted files and commit again."
+        echo "   Run 'git add -u' to add the formatted files."
+        exit 1
+    fi
+    
+    echo "🔍 Running linter..."
+    if ! make lint; then
+        echo "❌ Linting failed"
+        exit 1
+    fi
+fi
+
+# Check if GITHUB_TOKEN is set for tests
+if [ -z "$GITHUB_TOKEN" ]; then
+    echo "⚠️  Warning: GITHUB_TOKEN not set. Skipping tests."
+    echo "   To run tests, set GITHUB_TOKEN environment variable."
+else
+    echo "🧪 Running tests..."
+    if ! make test; then
+        echo "❌ Tests failed"
+        exit 1
+    fi
+fi
+
+# Build the project to ensure it compiles
+echo "🔨 Building project..."
+if ! make build; then
+    echo "❌ Build failed"
+    exit 1
+fi
+
+echo "✅ All pre-commit checks passed!"

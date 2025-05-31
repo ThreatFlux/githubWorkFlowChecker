@@ -113,7 +113,7 @@ ghactions-updater [options]
 
 ### Prerequisites
 
-- Go 1.24.2 or later
+- Go 1.24.3 or later
 - Make
 - Docker (optional)
 - Git
@@ -130,6 +130,29 @@ cd githubWorkFlowChecker
 ```bash
 make install-tools
 go mod download
+```
+
+3. Install git hooks (optional but recommended):
+```bash
+./scripts/git-hooks/install.sh
+```
+
+### Git Hooks
+
+This project includes pre-commit hooks that automatically:
+- Format Go code (`make fmt`)
+- Run linter (`make lint`)
+- Run tests (`make test`) - requires GITHUB_TOKEN
+- Build the project (`make build`)
+
+To install the hooks:
+```bash
+./scripts/git-hooks/install.sh
+```
+
+To skip hooks temporarily:
+```bash
+git commit --no-verify
 ```
 
 ### Common Tasks
