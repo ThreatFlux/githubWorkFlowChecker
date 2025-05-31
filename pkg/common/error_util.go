@@ -108,6 +108,13 @@ const (
 	ErrNoRateLimitInfo      = "No rate limit information available"
 	ErrRateLimitFormat      = "Rate limit: %d/%d, resets in %s"
 	ErrInvalidEnterpriseURL = "invalid enterprise URL: %w"
+
+	// Token validation errors
+	ErrInvalidGitHubToken    = "invalid GitHub token: %w"
+	ErrFailedToValidateToken = "failed to validate token: %w"
+	ErrTokenMissingScope     = "token missing required scope: %s"
+	ErrFailedToCheckScopes   = "failed to check token scopes: %w"
+	ErrNoScopesInResponse    = "no scope information in API response"
 )
 
 // CommandErrors contains constants for command line errors

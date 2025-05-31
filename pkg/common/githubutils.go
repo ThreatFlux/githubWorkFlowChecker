@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/go-github/v72/github"
@@ -233,4 +234,57 @@ func AddLabelsToIssue(ctx context.Context, client *github.Client, owner, repo st
 		_, resp, err := client.Issues.AddLabelsToIssue(ctx, owner, repo, number, labels)
 		return resp, err
 	})
+}
+
+// ValidateTokenScopes validates that the GitHub token has the required scopes
+// It checks if the token is valid and has the necessary permissions to perform
+// operations like reading repositories, modifying workflows, and creating pull requests.
+func ValidateTokenScopes(ctx context.Context, client *github.Client) error {
+	// Check if we can access the API by getting the authenticated user
+	user, resp, err := client.Users.Get(ctx, "")
+	if err != nil {
+		if resp != nil && resp.StatusCode == http.StatusUnauthorized {
+			return fmt.Errorf(ErrInvalidGitHubToken, err)
+		}
+		return fmt.Errorf(ErrFailedToValidateToken, err)
+	}
+
+	// For unauthenticated clients, we can't check scopes
+	if user.Login == nil {
+		// This is an unauthenticated client, which is allowed but has limitations
+		return nil
+	}
+
+	// Check OAuth scopes from response headers
+	// The X-OAuth-Scopes header contains the scopes granted to the token
+	scopesHeader := resp.Header.Get("X-OAuth-Scopes")
+	if scopesHeader == "" {
+		// Some token types (like GitHub App installation tokens) don't have scopes
+		// We'll allow these as they have their own permission model
+		return nil
+	}
+
+	// Define required scopes
+	// We need either 'repo' (full repo access) or 'public_repo' (public repo access only)
+	// and 'workflow' scope for modifying workflow files
+	requiredScopes := []string{"workflow"}
+	hasRepoScope := false
+
+	// Check if we have repo or public_repo scope
+	if strings.Contains(scopesHeader, "repo") || strings.Contains(scopesHeader, "public_repo") {
+		hasRepoScope = true
+	}
+
+	if !hasRepoScope {
+		return fmt.Errorf(ErrTokenMissingScope, "repo or public_repo")
+	}
+
+	// Check for other required scopes
+	for _, required := range requiredScopes {
+		if !strings.Contains(scopesHeader, required) {
+			return fmt.Errorf(ErrTokenMissingScope, required)
+		}
+	}
+
+	return nil
 }

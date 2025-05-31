@@ -75,6 +75,19 @@ var (
 )
 
 func run() error {
+	// Validate token scopes if token is provided and we're not in dry-run or stage mode
+	if *token != "" && !*dryRun && !*stage {
+		// Create a GitHub client to validate token scopes
+		client := common.NewGitHubClientWithToken(*token)
+		ctx := context.Background()
+
+		if err := common.ValidateTokenScopes(ctx, client); err != nil {
+			return fmt.Errorf("token validation failed: %w", err)
+		}
+
+		log.Println("GitHub token validated successfully")
+	}
+
 	// Convert repo path to absolute path
 	absPath, err := absFunc(*repoPath)
 	if err != nil {

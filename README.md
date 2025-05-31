@@ -93,7 +93,7 @@ ghactions-updater [options]
 
 | Option | Description | Required | Default |
 |--------|-------------|----------|---------|
-| `-token` | GitHub token with PR permissions | ✅ | - |
+| `-token` | GitHub token with PR permissions (see [Required Token Scopes](#required-token-scopes)) | ✅ | - |
 | `-owner` | Repository owner | ✅ | - |
 | `-repo-name` | Repository name | ✅ | - |
 | `-repo` | Repository path | ❌ | "." |
@@ -108,6 +108,17 @@ ghactions-updater [options]
 - `OWNER`: Alternative to `-owner` flag
 - `REPO_NAME`: Alternative to `-repo-name` flag
 - `WORKFLOWS_PATH`: Alternative to `-workflows-path` flag
+
+### Required Token Scopes
+
+The GitHub token must have the following scopes to function properly:
+
+- **`repo`** or **`public_repo`**: Required for reading repository contents and creating pull requests
+  - Use `repo` for private repositories
+  - Use `public_repo` for public repositories only
+- **`workflow`**: Required for modifying GitHub Actions workflow files
+
+The tool will validate token scopes on startup and provide clear error messages if required permissions are missing. For GitHub App tokens or fine-grained personal access tokens, ensure equivalent permissions are granted.
 
 ## 🛠️ Development
 
