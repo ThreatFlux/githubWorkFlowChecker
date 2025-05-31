@@ -1,0 +1,73 @@
+name: Auto Close Issues
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  close-issues:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: read
+    
+    steps:
+      - name: Close linked issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Get the PR body and title
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+            const title = pr.title || '';
+            const combinedText = `${title} ${body}`;
+            
+            // Regular expressions to find issue references
+            const issuePatterns = [
+              /[Ff]ixes\s+#(\d+)/g,
+              /[Cc]loses\s+#(\d+)/g,
+              /[Rr]esolves\s+#(\d+)/g,
+              /[Ff]ix\s+#(\d+)/g,
+              /[Cc]lose\s+#(\d+)/g,
+              /[Rr]esolve\s+#(\d+)/g
+            ];
+            
+            // Extract all issue numbers
+            const issueNumbers = new Set();
+            for (const pattern of issuePatterns) {
+              let match;
+              while ((match = pattern.exec(combinedText)) !== null) {
+                issueNumbers.add(parseInt(match[1]));
+              }
+            }
+            
+            // Close each referenced issue
+            for (const issueNumber of issueNumbers) {
+              try {
+                // Add a comment to the issue
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: `🎉 This issue has been resolved by PR #${pr.number} (${pr.title})\n\nThe fix has been merged into the ${pr.base.ref} branch.`
+                });
+                
+                // Close the issue
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  state: 'closed',
+                  state_reason: 'completed'
+                });
+                
+                console.log(`Closed issue #${issueNumber}`);
+              } catch (error) {
+                console.error(`Failed to close issue #${issueNumber}: ${error.message}`);
+              }
+            }
+            
+            if (issueNumbers.size === 0) {
+              console.log('No issues to close found in PR description');
+            }

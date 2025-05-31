@@ -1,0 +1,108 @@
+name: PR Automation
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  link-issues:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: read
+    
+    steps:
+      - name: Link PR to Issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+            const title = pr.title || '';
+            const combinedText = `${title} ${body}`;
+            
+            // Patterns to find issue references
+            const issuePatterns = [
+              /#(\d+)/g,
+              /[Ff]ixes\s+#(\d+)/g,
+              /[Cc]loses\s+#(\d+)/g,
+              /[Rr]esolves\s+#(\d+)/g,
+              /[Rr]elates?\s+to\s+#(\d+)/g,
+              /[Ii]ssue\s+#(\d+)/g
+            ];
+            
+            // Extract all issue numbers
+            const issueNumbers = new Set();
+            for (const pattern of issuePatterns) {
+              let match;
+              const text = combinedText;
+              pattern.lastIndex = 0; // Reset regex state
+              while ((match = pattern.exec(text)) !== null) {
+                issueNumbers.add(parseInt(match[1]));
+              }
+            }
+            
+            if (issueNumbers.size > 0) {
+              console.log(`Found references to issues: ${Array.from(issueNumbers).join(', ')}`);
+              
+              // Add labels based on linked issues
+              const labelsToAdd = new Set();
+              
+              for (const issueNumber of issueNumbers) {
+                try {
+                  // Get issue details
+                  const issue = await github.rest.issues.get({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issueNumber
+                  });
+                  
+                  // Copy relevant labels from issue to PR
+                  if (issue.data.labels) {
+                    issue.data.labels.forEach(label => {
+                      // Copy security, enhancement, bug labels
+                      if (['security', 'enhancement', 'bug', 'documentation'].includes(label.name)) {
+                        labelsToAdd.add(label.name);
+                      }
+                    });
+                  }
+                } catch (error) {
+                  console.error(`Failed to get issue #${issueNumber}: ${error.message}`);
+                }
+              }
+              
+              // Apply labels to PR
+              if (labelsToAdd.size > 0) {
+                try {
+                  await github.rest.issues.addLabels({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: pr.number,
+                    labels: Array.from(labelsToAdd)
+                  });
+                  console.log(`Added labels to PR: ${Array.from(labelsToAdd).join(', ')}`);
+                } catch (error) {
+                  console.error(`Failed to add labels: ${error.message}`);
+                }
+              }
+              
+              // Update PR body to ensure issue links are clear
+              const issueLinks = Array.from(issueNumbers).map(num => `- #${num}`).join('\n');
+              const relatedSection = `\n\n## Related Issues\n${issueLinks}`;
+              
+              if (!body.includes('## Related Issues')) {
+                try {
+                  await github.rest.pulls.update({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    pull_number: pr.number,
+                    body: body + relatedSection
+                  });
+                  console.log('Updated PR body with related issues section');
+                } catch (error) {
+                  console.error(`Failed to update PR body: ${error.message}`);
+                }
+              }
+            } else {
+              console.log('No issue references found in PR');
+            }
