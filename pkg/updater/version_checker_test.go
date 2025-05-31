@@ -314,6 +314,58 @@ func TestDefaultVersionChecker_IsUpdateAvailable(t *testing.T) {
 			WantHash:      "abc123",
 			WantError:     false,
 		},
+		{
+			Name: "edge case - 5 character SHA (too short)",
+			Action: ActionReference{
+				Owner:   "test-owner",
+				Name:    "test-repo",
+				Version: "abc12", // Only 5 characters
+			},
+			ServerType:    NormalVersionServer,
+			WantAvailable: true, // Should treat as version tag, not SHA
+			WantVersion:   "v2.0.0",
+			WantHash:      "abc123",
+			WantError:     false,
+		},
+		{
+			Name: "edge case - 41 character string (too long for SHA)",
+			Action: ActionReference{
+				Owner:   "test-owner",
+				Name:    "test-repo",
+				Version: "01234567890123456789012345678901234567890", // 41 characters
+			},
+			ServerType:    NormalVersionServer,
+			WantAvailable: true, // Should treat as version tag, not SHA
+			WantVersion:   "v2.0.0",
+			WantHash:      "abc123",
+			WantError:     false,
+		},
+		{
+			Name: "edge case - 7 character SHA prefix match",
+			Action: ActionReference{
+				Owner:   "test-owner",
+				Name:    "test-repo",
+				Version: "abc1234", // 7 characters, matches prefix of abc123...
+			},
+			ServerType:    NormalVersionServer,
+			WantAvailable: true, // Should NOT match because server returns abc123 not abc1234...
+			WantVersion:   "v2.0.0",
+			WantHash:      "abc123",
+			WantError:     false,
+		},
+		{
+			Name: "edge case - non-hex characters in SHA-length string",
+			Action: ActionReference{
+				Owner:   "test-owner",
+				Name:    "test-repo",
+				Version: "xyz123gh", // 8 characters but contains non-hex
+			},
+			ServerType:    NormalVersionServer,
+			WantAvailable: true, // Should treat as version tag, not SHA
+			WantVersion:   "v2.0.0",
+			WantHash:      "abc123",
+			WantError:     false,
+		},
 	}
 
 	for _, tt := range tests {
