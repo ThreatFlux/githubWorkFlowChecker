@@ -76,6 +76,9 @@ func TestDefaultGitHubClientOptions(t *testing.T) {
 	if options.RetryDelay != 1*time.Second {
 		t.Errorf("Expected default retry delay to be 1s, got %v", options.RetryDelay)
 	}
+	if options.MaxRetryDelay != 60*time.Second {
+		t.Errorf("Expected default max retry delay to be 60s, got %v", options.MaxRetryDelay)
+	}
 	if options.Token != "" {
 		t.Errorf("Expected default token to be empty, got %s", options.Token)
 	}
