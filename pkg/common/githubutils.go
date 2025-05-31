@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -21,17 +22,51 @@ type GitHubClientOptions struct {
 	Timeout time.Duration
 	// RetryCount is the number of times to retry failed requests
 	RetryCount int
-	// RetryDelay is the delay between retries
+	// RetryDelay is the base delay for exponential backoff retries
 	RetryDelay time.Duration
+	// MaxRetryDelay is the maximum delay between retries
+	MaxRetryDelay time.Duration
 }
 
 // DefaultGitHubClientOptions returns the default options for GitHub client creation
 func DefaultGitHubClientOptions() GitHubClientOptions {
 	return GitHubClientOptions{
-		Timeout:    30 * time.Second,
-		RetryCount: 3,
-		RetryDelay: 1 * time.Second,
+		Timeout:       30 * time.Second,
+		RetryCount:    3,
+		RetryDelay:    1 * time.Second,
+		MaxRetryDelay: 60 * time.Second,
 	}
+}
+
+// CalculateBackoff returns the next backoff duration with jitter for exponential backoff
+func CalculateBackoff(attempt int, baseDelay time.Duration, maxDelay time.Duration) time.Duration {
+	if attempt <= 0 {
+		return baseDelay
+	}
+
+	// Calculate exponential backoff: baseDelay * 2^attempt
+	// Use bit shifting for efficient power of 2 calculation, but cap at 30 to prevent overflow
+	shiftAmount := uint(attempt)
+	if shiftAmount > 30 {
+		shiftAmount = 30
+	}
+	backoff := baseDelay * time.Duration(1<<shiftAmount)
+
+	// Cap at maximum delay
+	if backoff > maxDelay {
+		backoff = maxDelay
+	}
+
+	// Add jitter (±25% randomization) to prevent thundering herd
+	jitterRange := float64(backoff) * 0.25
+	jitter := (rand.Float64()*2 - 1) * jitterRange
+
+	finalDelay := time.Duration(float64(backoff) + jitter)
+	if finalDelay < 0 {
+		finalDelay = baseDelay
+	}
+
+	return finalDelay
 }
 
 // NewGitHubClient creates a new GitHub client with the given options
@@ -72,16 +107,29 @@ func NewGitHubClientWithToken(token string) *github.Client {
 type RateLimitHandler struct {
 	client       *github.Client
 	maxRetries   int
-	retryDelay   time.Duration
+	baseDelay    time.Duration
+	maxDelay     time.Duration
 	lastResponse *github.Response
+	attempt      int
 }
 
 // NewRateLimitHandler creates a new rate limit handler for the given client
-func NewRateLimitHandler(client *github.Client, maxRetries int, retryDelay time.Duration) *RateLimitHandler {
+func NewRateLimitHandler(client *github.Client, maxRetries int, baseDelay time.Duration) *RateLimitHandler {
 	return &RateLimitHandler{
 		client:     client,
 		maxRetries: maxRetries,
-		retryDelay: retryDelay,
+		baseDelay:  baseDelay,
+		maxDelay:   60 * time.Second, // Default max delay
+	}
+}
+
+// NewRateLimitHandlerWithOptions creates a new rate limit handler with full configuration
+func NewRateLimitHandlerWithOptions(client *github.Client, maxRetries int, baseDelay, maxDelay time.Duration) *RateLimitHandler {
+	return &RateLimitHandler{
+		client:     client,
+		maxRetries: maxRetries,
+		baseDelay:  baseDelay,
+		maxDelay:   maxDelay,
 	}
 }
 
@@ -100,22 +148,31 @@ func (h *RateLimitHandler) HandleRateLimit(resp *github.Response, err error) boo
 		return false
 	}
 
+	var waitTime time.Duration
+
 	// Check if we need to wait for rate limit reset
 	if resp.Rate.Remaining == 0 {
-		// Calculate how long to wait
+		// Calculate how long to wait until rate limit resets
 		resetTime := resp.Rate.Reset.Time
-		waitTime := time.Until(resetTime)
+		resetWaitTime := time.Until(resetTime)
 
-		if waitTime > 0 && waitTime < h.retryDelay*10 {
-			// Sleep until the rate limit resets
-			time.Sleep(waitTime + 100*time.Millisecond)
-			h.maxRetries--
-			return true
+		// If the reset time is reasonable (less than 10x max delay), wait for it
+		if resetWaitTime > 0 && resetWaitTime < h.maxDelay*10 {
+			waitTime = resetWaitTime + 100*time.Millisecond
+		} else {
+			// Otherwise use exponential backoff
+			waitTime = CalculateBackoff(h.attempt, h.baseDelay, h.maxDelay)
 		}
+	} else {
+		// Use exponential backoff for other rate limit scenarios
+		waitTime = CalculateBackoff(h.attempt, h.baseDelay, h.maxDelay)
 	}
 
-	// Otherwise, just wait the retry delay
-	time.Sleep(h.retryDelay)
+	fmt.Printf("Rate limited. Retrying in %v (attempt %d/%d)\n",
+		waitTime, h.attempt+1, h.maxRetries+h.attempt+1)
+
+	time.Sleep(waitTime)
+	h.attempt++
 	h.maxRetries--
 	return true
 }
@@ -180,7 +237,8 @@ func executeGitHubAPIWithResult[T any](
 ) (T, error) {
 	var result T
 
-	err := ExecuteWithRetry(ctx, client, 3, time.Second, func() (*github.Response, error) {
+	options := DefaultGitHubClientOptions()
+	err := ExecuteWithRetry(ctx, client, options.RetryCount, options.RetryDelay, func() (*github.Response, error) {
 		var resp *github.Response
 		var err error
 		result, resp, err = apiFn()
@@ -196,7 +254,8 @@ func executeGitHubAPIWithNoResult(
 	client *github.Client,
 	apiFn func() (*github.Response, error),
 ) error {
-	return ExecuteWithRetry(ctx, client, 3, time.Second, apiFn)
+	options := DefaultGitHubClientOptions()
+	return ExecuteWithRetry(ctx, client, options.RetryCount, options.RetryDelay, apiFn)
 }
 
 // GetLatestRelease gets the latest release for a repository with retry logic
