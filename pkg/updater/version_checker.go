@@ -74,8 +74,13 @@ func (c *DefaultVersionChecker) IsUpdateAvailable(ctx context.Context, action Ac
 		return false, "", "", err
 	}
 
-	// If current version is a commit SHA, compare directly
-	if len(action.Version) == 40 && common.IsHexString(action.Version) {
+	// If current version is a commit SHA (full or abbreviated), compare directly
+	// GitHub typically uses 7+ characters for abbreviated SHAs, but we'll accept 6+ for flexibility
+	if len(action.Version) >= 6 && len(action.Version) <= 40 && common.IsHexString(action.Version) {
+		// For abbreviated SHAs, check if latestHash starts with the abbreviated version
+		if len(action.Version) < 40 {
+			return !strings.HasPrefix(latestHash, action.Version), latestVersion, latestHash, nil
+		}
 		return action.Version != latestHash, latestVersion, latestHash, nil
 	}
 
