@@ -466,7 +466,7 @@ jobs:
 			stage = flag.Bool("stage", false, "Apply changes locally without creating a PR")
 
 			// Build command line args
-			args := []string{"cmd", "-owner=test-owner", "-repo-name=test-repo", "-token=test-token"}
+			args := []string{"cmd", "-owner=test-owner", "-repo-name=test-repo", "-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a"}
 			for k, v := range tt.flags {
 				args = append(args, fmt.Sprintf("-%s=%s", k, v))
 			}
@@ -560,7 +560,7 @@ jobs:
 	repoPath = flag.String("repo", ".", "Path to the repository")
 	owner = flag.String("owner", "test-owner", "Repository owner")
 	repo = flag.String("repo-name", "test-repo", "Repository name")
-	token = flag.String("token", "test-token", "GitHub token")
+	token = flag.String("token", "ghp_16C7e42F292c6912E7710c838347Ae178B4a", "GitHub token")
 	workflowsPath = flag.String("workflows-path", ".github/workflows", "Path to workflow files")
 	dryRun = flag.Bool("dry-run", false, "Show changes without applying them")
 	stage = flag.Bool("stage", false, "Apply changes locally without creating a PR")
@@ -702,7 +702,7 @@ jobs:
 				"cmd",
 				"-owner=test-owner",
 				"-repo-name=test-repo",
-				"-token=test-token",
+				"-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 			},
 			versionChecker: &mockVersionChecker{
 				latestVersion: "v3",
@@ -719,7 +719,7 @@ jobs:
 			args: []string{
 				"cmd",
 				"-repo-name=test-repo",
-				"-token=test-token",
+				"-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 			},
 			versionChecker: &mockVersionChecker{
 				latestVersion: "v3",
@@ -737,7 +737,7 @@ jobs:
 				"cmd",
 				"-owner=test-owner",
 				"-repo-name=test-repo",
-				"-token=test-token",
+				"-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 			},
 			versionChecker: &mockVersionChecker{
 				latestVersion: "v3",
@@ -906,7 +906,7 @@ jobs:
 				"cmd",
 				"-owner=test-owner",
 				"-repo-name=test-repo",
-				"-token=test-token",
+				"-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 			},
 			wantErr: false,
 		},
@@ -915,7 +915,7 @@ jobs:
 			args: []string{
 				"cmd",
 				"-repo-name=test-repo",
-				"-token=test-token",
+				"-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 			},
 			wantErr: true,
 		},
@@ -924,7 +924,7 @@ jobs:
 			args: []string{
 				"cmd",
 				"-owner=test-owner",
-				"-token=test-token",
+				"-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 			},
 			wantErr: true,
 		},
@@ -936,7 +936,7 @@ jobs:
 				"-repo-name=test-repo",
 			},
 			envVars: map[string]string{
-				"GITHUB_TOKEN": "test-token",
+				"GITHUB_TOKEN": "ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 			},
 			wantErr: false,
 		},
@@ -1090,7 +1090,7 @@ func TestValidateFlags(t *testing.T) {
 				"cmd",
 				"-owner=test-owner",
 				"-repo-name=test-repo",
-				"-token=test-token",
+				"-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 			},
 			wantErr: false,
 		},
@@ -1099,7 +1099,7 @@ func TestValidateFlags(t *testing.T) {
 			args: []string{
 				"cmd",
 				"-repo-name=test-repo",
-				"-token=test-token",
+				"-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 			},
 			wantErr: true,
 		},
@@ -1108,7 +1108,7 @@ func TestValidateFlags(t *testing.T) {
 			args: []string{
 				"cmd",
 				"-owner=test-owner",
-				"-token=test-token",
+				"-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 			},
 			wantErr: true,
 		},
@@ -1120,7 +1120,7 @@ func TestValidateFlags(t *testing.T) {
 				"-repo-name=test-repo",
 			},
 			envVars: map[string]string{
-				"GITHUB_TOKEN": "test-token",
+				"GITHUB_TOKEN": "ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 			},
 			wantErr: false,
 		},
@@ -1138,7 +1138,7 @@ func TestValidateFlags(t *testing.T) {
 				"cmd",
 				"-owner=test-owner",
 				"-repo-name=test-repo",
-				"-token=''", // Empty token
+				"-token=", // Empty token
 			},
 			envVars: map[string]string{
 				"GITHUB_TOKEN": "",
@@ -1151,7 +1151,7 @@ func TestValidateFlags(t *testing.T) {
 				"cmd",
 				"-owner=test-owner",
 				"-repo-name=test-repo",
-				"-token=test-token",
+				"-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 				"-workflows-path=custom/workflows",
 			},
 			wantErr: false,
@@ -1162,7 +1162,7 @@ func TestValidateFlags(t *testing.T) {
 				"cmd",
 				"-owner=test-owner",
 				"-repo-name=test-repo",
-				"-token=test-token",
+				"-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 			},
 			envVars: map[string]string{
 				"WORKFLOWS_PATH": "custom/workflows",
@@ -1175,7 +1175,7 @@ func TestValidateFlags(t *testing.T) {
 				"cmd",
 				"-owner=test-owner",
 				"-repo-name=test-repo",
-				"-token=test-token",
+				"-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 				"-dry-run",
 			},
 			wantErr: false,
@@ -1186,7 +1186,7 @@ func TestValidateFlags(t *testing.T) {
 				"cmd",
 				"-owner=test-owner",
 				"-repo-name=test-repo",
-				"-token=test-token",
+				"-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 				"-stage",
 			},
 			wantErr: false,
@@ -1197,7 +1197,7 @@ func TestValidateFlags(t *testing.T) {
 				"cmd",
 				"-owner=test-owner",
 				"-repo-name=test-repo",
-				"-token=test-token",
+				"-token=ghp_16C7e42F292c6912E7710c838347Ae178B4a",
 				"-dry-run",
 				"-stage",
 			},
