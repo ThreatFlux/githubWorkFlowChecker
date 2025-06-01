@@ -175,9 +175,9 @@ func TestRateLimitHandler_HandleRateLimit_ExponentialBackoff(t *testing.T) {
 		expectedMinWait time.Duration
 		expectedMaxWait time.Duration
 	}{
-		{5 * time.Millisecond, 30 * time.Millisecond},   // ~20ms * 0.75-1.25, with extra margin
-		{10 * time.Millisecond, 60 * time.Millisecond},  // ~40ms * 0.75-1.25, with extra margin
-		{40 * time.Millisecond, 120 * time.Millisecond}, // ~80ms * 0.75-1.25, with extra margin
+		{7 * time.Millisecond, 13 * time.Millisecond},  // 10ms * 0.75-1.25
+		{15 * time.Millisecond, 25 * time.Millisecond}, // 20ms * 0.75-1.25
+		{30 * time.Millisecond, 50 * time.Millisecond}, // 40ms * 0.75-1.25
 	}
 
 	for i, expected := range attempts {
@@ -223,9 +223,9 @@ func TestRateLimitHandler_HandleRateLimit_FarFutureReset(t *testing.T) {
 	}
 
 	// Should use exponential backoff instead of waiting for reset
-	// First attempt should be around 20ms (10ms * 2^1) with jitter
-	if elapsed < 7*time.Millisecond || elapsed > 25*time.Millisecond {
-		t.Errorf("Expected exponential backoff timing, got %v", elapsed)
+	// First attempt should be around 10ms (10ms * 2^0) with jitter (±25%)
+	if elapsed < 7*time.Millisecond || elapsed > 13*time.Millisecond {
+		t.Errorf("Expected exponential backoff timing (7-13ms), got %v", elapsed)
 	}
 }
 
