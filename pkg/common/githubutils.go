@@ -59,7 +59,7 @@ func CalculateBackoff(attempt int, baseDelay time.Duration, maxDelay time.Durati
 
 	// Add jitter (±25% randomization) to prevent thundering herd
 	jitterRange := float64(backoff) * 0.25
-	jitter := (rand.Float64()*2 - 1) * jitterRange
+	jitter := (rand.Float64()*2 - 1) * jitterRange // #nosec G404 - Non-cryptographic randomness is acceptable for timing jitter
 
 	finalDelay := time.Duration(float64(backoff) + jitter)
 	if finalDelay < 0 {
