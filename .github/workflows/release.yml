@@ -11,7 +11,7 @@ jobs:
     if: ${{ !contains(github.event.head_commit.message, 'skip ci') }}
     steps:
       - name: Wait for tests
-        uses: lewagon/wait-on-check-action@ccfb013c15c8afb7bf2b7c028fb74dc5a068cccc  # v1.3.4
+        uses: lewagon/wait-on-check-action@0dceb95e7c4cad8cc7422aee3885998f5cab9c79  # v1.4.0
         with:
           ref: ${{ github.ref }}
           check-name: 'Test'
@@ -136,7 +136,7 @@ jobs:
           ' CHANGELOG.md > release_notes.md
 
       - name: Upload Release Assets
-        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631  # v2.2.2
+        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8  # v2.3.2
         with:
           files: |
             ghactions-updater-linux-amd64
