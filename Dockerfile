@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 # Build stage
-FROM golang:1.24.3-alpine3.21 AS builder
+FROM golang:1.25-rc-alpine3.21 AS builder
 
 # Build arguments
 ARG VERSION=development
