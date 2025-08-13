@@ -50,6 +50,15 @@ func validateFlags() error {
 		}
 	}
 
+	// Validate token format early if token is provided
+	if *token != "" {
+		tokenInfo, err := common.ValidateGitHubToken(*token)
+		if err != nil {
+			return fmt.Errorf("invalid GitHub token format: %v", err)
+		}
+		log.Printf("Using %s token", tokenInfo.Type)
+	}
+
 	// Check for environment variable override for workflows path
 	if envPath := os.Getenv("WORKFLOWS_PATH"); envPath != "" {
 		*workflowsPath = envPath

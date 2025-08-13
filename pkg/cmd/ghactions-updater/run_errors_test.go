@@ -121,7 +121,7 @@ func TestRunErrorCases(t *testing.T) {
 	var testRepoPath = "."
 	var testOwner = "test-owner"
 	var testRepo = "test-repo"
-	var testToken = "test-token"
+	var testToken = "ghp_16C7e42F292c6912E7710c838347Ae178B4a"
 	var testWorkflowsPath = ".github/workflows"
 	var testDryRun = false
 	var testStage = false
@@ -142,7 +142,7 @@ func TestRunErrorCases(t *testing.T) {
 	testRepoPath = tempDir
 	testOwner = "test-owner"
 	testRepo = "test-repo"
-	testToken = "test-token"
+	testToken = "ghp_16C7e42F292c6912E7710c838347Ae178B4a"
 	testWorkflowsPath = ".github/workflows"
 
 	// Create default test reference
