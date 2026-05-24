@@ -1,6 +1,6 @@
 module github.com/ThreatFlux/githubWorkFlowChecker
 
-go 1.25.8
+go 1.25.10
 
 require (
 	github.com/google/go-github/v72 v72.0.0
