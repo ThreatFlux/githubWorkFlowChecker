@@ -1,5 +1,5 @@
 # Required versions
-REQUIRED_GO_VERSION = 1.25.0
+REQUIRED_GO_VERSION = 1.25.8
 REQUIRED_DOCKER_VERSION = 24.0.0
 
 # Tool paths and versions
