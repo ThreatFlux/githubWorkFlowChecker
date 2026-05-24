@@ -119,7 +119,11 @@ security: install-tools ## Run security scans
 	@echo "Running security scans..."
 	@$(GOSEC) ./...
 	@$(GOVULNCHECK) ./...
-	@go list -json -deps ./... | nancy sleuth
+	@if [ -n "$$OSSINDEX_USERNAME" ] && [ -n "$$OSSINDEX_TOKEN" ]; then \
+		go list -json -deps ./... | nancy sleuth --username "$$OSSINDEX_USERNAME" --token "$$OSSINDEX_TOKEN"; \
+	else \
+		echo "Skipping Nancy OSS Index scan; OSSINDEX_USERNAME/OSSINDEX_TOKEN are not configured"; \
+	fi
 
 docker-build: check-versions ## Build Docker image
 	@echo "Building Docker image..."
