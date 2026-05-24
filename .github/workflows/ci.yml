@@ -26,7 +26,7 @@ jobs:
 
       - name: Run tests with coverage
         env:
-          GITHUB_TOKEN: ${{ secrets.GIT_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           make coverage
 
