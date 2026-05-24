@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 
 	"github.com/google/go-github/v72/github"
 )
@@ -73,7 +74,7 @@ func (b *MockServerBuilder) WithPRHandler(owner, repo string) *MockServerBuilder
 
 // WithLabelsHandler adds a handler for GitHub labels endpoint
 func (b *MockServerBuilder) WithLabelsHandler(owner, repo string, issueNumber int) *MockServerBuilder {
-	path := "/repos/" + owner + "/" + repo + "/issues/" + string(rune('0'+issueNumber)) + "/labels"
+	path := "/repos/" + owner + "/" + repo + "/issues/" + strconv.Itoa(issueNumber) + "/labels"
 	return b.WithJSONResponse(path, http.StatusOK, `[{"name": "dependencies"}, {"name": "automated-pr"}]`)
 }
 

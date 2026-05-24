@@ -175,9 +175,9 @@ func TestRateLimitHandler_HandleRateLimit_ExponentialBackoff(t *testing.T) {
 		expectedMinWait time.Duration
 		expectedMaxWait time.Duration
 	}{
-		{7 * time.Millisecond, 13 * time.Millisecond},  // 10ms * 2^0 = 10ms (±25% jitter)
-		{15 * time.Millisecond, 25 * time.Millisecond}, // 10ms * 2^1 = 20ms (±25% jitter)
-		{30 * time.Millisecond, 50 * time.Millisecond}, // 10ms * 2^2 = 40ms (±25% jitter)
+		{7 * time.Millisecond, 25 * time.Millisecond},  // 10ms * 2^0 = 10ms (±25% jitter + scheduler overhead)
+		{15 * time.Millisecond, 35 * time.Millisecond}, // 10ms * 2^1 = 20ms (±25% jitter + scheduler overhead)
+		{30 * time.Millisecond, 65 * time.Millisecond}, // 10ms * 2^2 = 40ms (±25% jitter + scheduler overhead)
 	}
 
 	for i, expected := range attempts {

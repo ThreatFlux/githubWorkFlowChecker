@@ -1,5 +1,5 @@
 # Required versions
-REQUIRED_GO_VERSION = 1.25.0
+REQUIRED_GO_VERSION = 1.25.10
 REQUIRED_DOCKER_VERSION = 24.0.0
 
 # Tool paths and versions
@@ -21,6 +21,8 @@ BUILD_DATE ?= $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 BUILD_FLAGS ?= -v
 TEST_FLAGS ?= -v -race -cover
 LINT_FLAGS ?= run --timeout=5m
+TEST_PACKAGES ?= $(shell $(GO) list ./pkg/... | grep -v '/pkg/test/e2e$$')
+E2E_PACKAGES ?= ./pkg/test/e2e
 
 # Coverage output paths
 COVERAGE_PROFILE = coverage.out
@@ -58,7 +60,7 @@ check-github-token: ## Validate GitHub token
 		exit 1; \
 	fi
 	@echo "Testing GitHub API access..."
-	@curl -s -f -H "Authorization: token $$GITHUB_TOKEN" https://api.github.com/user > /dev/null && \
+	@curl -s -f -H "Authorization: Bearer $$GITHUB_TOKEN" https://api.github.com/rate_limit > /dev/null && \
 		echo "✓ GitHub token is valid and has API access" || \
 		(echo "✗ GitHub token is invalid or expired" && \
 		 echo "Please check your token at: https://github.com/settings/tokens" && \
@@ -94,15 +96,19 @@ test: check-github-token ## Run unit tests with coverage
 	@echo "Running tests..."
 	@echo "Configuring Git to use SSH for GitHub operations..."
 	@git config url."git@github.com:".insteadOf "https://github.com/" 2>/dev/null || true
-	@$(GO) test $(TEST_FLAGS) ./pkg/...
+	@$(GO) test $(TEST_FLAGS) $(TEST_PACKAGES)
 
 coverage: check-github-token ## Generate test coverage report
 	@echo "Generating coverage report..."
 	@echo "Configuring Git to use SSH for GitHub operations..."
 	@git config url."git@github.com:".insteadOf "https://github.com/" 2>/dev/null || true
-	@$(GO) test -coverprofile=$(COVERAGE_PROFILE) ./pkg/...
+	@$(GO) test -coverprofile=$(COVERAGE_PROFILE) $(TEST_PACKAGES)
 	@$(GO) tool cover -html=$(COVERAGE_PROFILE) -o $(COVERAGE_HTML)
 	@$(GO) tool cover -func=$(COVERAGE_PROFILE)
+
+e2e: check-github-token ## Run GitHub API end-to-end tests
+	@echo "Running end-to-end tests..."
+	@$(GO) test $(TEST_FLAGS) $(E2E_PACKAGES)
 
 dupl-check: install-tools ## Check for duplicate code
 	@echo "Checking for duplicate code..."
@@ -113,7 +119,11 @@ security: install-tools ## Run security scans
 	@echo "Running security scans..."
 	@$(GOSEC) ./...
 	@$(GOVULNCHECK) ./...
-	@go list -json -deps ./... | nancy sleuth
+	@if [ -n "$$OSSINDEX_USERNAME" ] && [ -n "$$OSSINDEX_TOKEN" ]; then \
+		go list -json -deps ./... | nancy sleuth --username "$$OSSINDEX_USERNAME" --token "$$OSSINDEX_TOKEN"; \
+	else \
+		echo "Skipping Nancy OSS Index scan; OSSINDEX_USERNAME/OSSINDEX_TOKEN are not configured"; \
+	fi
 
 docker-build: check-versions ## Build Docker image
 	@echo "Building Docker image..."
