@@ -58,7 +58,7 @@ check-github-token: ## Validate GitHub token
 		exit 1; \
 	fi
 	@echo "Testing GitHub API access..."
-	@curl -s -f -H "Authorization: token $$GITHUB_TOKEN" https://api.github.com/user > /dev/null && \
+	@curl -s -f -H "Authorization: Bearer $$GITHUB_TOKEN" https://api.github.com/rate_limit > /dev/null && \
 		echo "✓ GitHub token is valid and has API access" || \
 		(echo "✗ GitHub token is invalid or expired" && \
 		 echo "Please check your token at: https://github.com/settings/tokens" && \
